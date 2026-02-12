@@ -257,8 +257,15 @@ app.post('/auth/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Super admin and admin_hr accounts are automatically approved
-    const isAutoApproved = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole);
+    // Auto-approve privileged roles (Super Admin, Admin/HR, and executive positions)
+    const autoApprovedRoles = [
+      ROLES.SUPER_ADMIN,
+      ROLES.ADMIN_HR,
+      ROLES.HEAD_REQUISITIONING_OFFICE,
+      ROLES.MUNICIPAL_BUDGET_OFFICER,
+      ROLES.MUNICIPAL_ASSESSOR
+    ];
+    const isAutoApproved = autoApprovedRoles.includes(userRole);
     
     const newStaff = new Staff({
       id,
@@ -310,8 +317,16 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Auto-approve accounts with roles that don't require approval
-    if (!staff.isApproved && [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(staff.role)) {
+    // Auto-approve accounts with privileged roles
+    const autoApprovedRoles = [
+      ROLES.SUPER_ADMIN,
+      ROLES.ADMIN_HR,
+      ROLES.HEAD_REQUISITIONING_OFFICE,
+      ROLES.MUNICIPAL_BUDGET_OFFICER,
+      ROLES.MUNICIPAL_ASSESSOR
+    ];
+    
+    if (!staff.isApproved && autoApprovedRoles.includes(staff.role)) {
       console.log('Auto-approving account:', staff.id, 'Role:', staff.role);
       staff.isApproved = true;
       staff.approvedAt = Date.now();
