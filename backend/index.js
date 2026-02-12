@@ -35,7 +35,37 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// Role-based Middleware (allows super_admin to bypass all checks)
+// Check if user can manage staff in a specific department
+const canManageStaff = (userRole, userDepartment, targetStaffDepartment) => {
+  // Super Admin and Admin/HR can manage all staff
+  if ([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole)) {
+    return true;
+  }
+  
+  // Head Officer can manage staff in their own department
+  if (userRole === ROLES.HEAD_OFFICER && userDepartment === targetStaffDepartment) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Check if user can view staff in a specific department
+const canViewStaff = (userRole, userDepartment, targetStaffDepartment) => {
+  // Can manage = can view
+  if (canManageStaff(userRole, userDepartment, targetStaffDepartment)) {
+    return true;
+  }
+  
+  // Staff can only view their own profile
+  if (userRole === ROLES.STAFF && userDepartment === targetStaffDepartment) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Middleware for role-based Middleware (allows super_admin to bypass all checks)
 const requireRole = (allowedRoles) => {
   // Convert single role string to array
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
@@ -433,10 +463,27 @@ app.post('/staffs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]
   }
 });
 
-// Get all staffs (Super Admin and Admin/HR only)
-app.get('/staffs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Get all staffs (Super Admin, Admin/HR, and Head Officers for their department)
+app.get('/staffs', verifyToken, async (req, res) => {
   try {
-    const staffs = await Staff.find().select('-password');
+    // Check if user has permission to view staffs
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can view staff lists.' });
+    }
+
+    let filter = {};
+    
+    // Head Officers can only see staff in their department
+    if (req.user.role === ROLES.HEAD_OFFICER) {
+      filter = { 
+        $or: [
+          { department: req.user.department },
+          { role: ROLES.HEAD_OFFICER, department: req.user.department }
+        ]
+      };
+    }
+
+    const staffs = await Staff.find(filter).select('-password');
     res.json(staffs);
   } catch (error) {
     console.error('Error fetching staffs:', error);
@@ -444,7 +491,7 @@ app.get('/staffs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR])
   }
 });
 
-// Get single staff (Self or Admin)
+// Get single staff (Self, Admin, or Head Officer of same department)
 app.get('/staffs/:id', verifyToken, async (req, res) => {
   try {
     const requestedId = req.params.id;
@@ -455,37 +502,41 @@ app.get('/staffs/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Staff not found' });
     }
 
-    // Only allow staff to view their own profile or admins to view anyone
-    if (req.user.role !== 'admin' && req.user.staffId !== requestedId) {
-      console.log('Access denied - User staffId:', req.user.staffId, 'Requested:', requestedId);
-      return res.status(403).json({ message: 'Access denied' });
+    // Check if user can view this staff
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+    const staffDepartment = staff.department;
+
+    // Super Admin and Admin/HR can view anyone
+    if ([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole)) {
+      return res.json(staff);
     }
 
-    res.json(staff);
+    // Staff can only view their own profile
+    if (userRole === ROLES.STAFF && req.user.staffId === requestedId) {
+      return res.json(staff);
+    }
+
+    // Head Officer can view staff in their department
+    if (userRole === ROLES.HEAD_OFFICER) {
+      if (userDepartment === staffDepartment) {
+        return res.json(staff);
+      }
+      console.log('Access denied - Head Officer from', userDepartment, 'requested staff from', staffDepartment);
+      return res.status(403).json({ message: 'Access denied. You can only view staff in your department.' });
+    }
+
+    console.log('Access denied - User staffId:', req.user.staffId, 'Requested:', requestedId);
+    return res.status(403).json({ message: 'Access denied' });
   } catch (error) {
     console.error('Error fetching staff:', error);
     res.status(500).json({ message: 'Failed to retrieve staff' });
   }
 });
 
-// Update staff (Admin can update any staff, Staff can update themselves)
+// Update staff (Admin can update any staff, Staff can update themselves, Head Officers can update their dept staff)
 app.put('/staffs/:id', verifyToken, async (req, res) => {
   const { name, position, department, email, phone, dateOfBirth, placeOfBirth, tinNumber, role, password, currentPassword } = req.body;
-
-  // Check if user is trying to update someone else's account without admin privileges
-  console.log('Update staff request:');
-  console.log('  User staffId:', req.user.staffId);
-  console.log('  Requested ID:', req.params.id);
-  console.log('  User role:', req.user.role);
-  
-  if (req.user.role !== 'admin' && req.user.staffId !== req.params.id) {
-    console.log('  Access denied - staffId mismatch');
-    return res.status(403).json({ message: 'You can only update your own account' });
-  }
-
-  if (!name && !position && !department && !email && !phone && !dateOfBirth && !placeOfBirth && !tinNumber && !role && !password) {
-    return res.status(400).json({ message: 'At least one field is required to update' });
-  }
 
   try {
     // Find the staff member
@@ -494,15 +545,57 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Staff not found' });
     }
 
+    // Check if user has permission to update this staff
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+    const userStaffId = req.user.staffId;
+    const staffDepartment = staff.department;
+
+    console.log('Update staff request:');
+    console.log('  User staffId:', userStaffId);
+    console.log('  User role:', userRole);
+    console.log('  Requested ID:', req.params.id);
+    console.log('  Staff department:', staffDepartment);
+
+    // Super Admin and Admin/HR can update anyone
+    const canUpdate = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole);
+    
+    // Staff can only update their own account
+    if (!canUpdate && userRole === ROLES.STAFF) {
+      if (userStaffId !== req.params.id) {
+        console.log('  Access denied - Staff can only update their own account');
+        return res.status(403).json({ message: 'You can only update your own account' });
+      }
+      canUpdate = true;
+    }
+    
+    // Head Officer can update staff in their department
+    if (!canUpdate && userRole === ROLES.HEAD_OFFICER) {
+      if (userDepartment !== staffDepartment) {
+        console.log('  Access denied - Head Officer from', userDepartment, 'cannot update staff from', staffDepartment);
+        return res.status(403).json({ message: 'You can only update staff in your own department' });
+      }
+      canUpdate = true;
+    }
+
+    if (!canUpdate) {
+      return res.status(403).json({ message: 'You do not have permission to update this staff account' });
+    }
+
+    if (!name && !position && !department && !email && !phone && !dateOfBirth && !placeOfBirth && !tinNumber && !role && !password) {
+      return res.status(400).json({ message: 'At least one field is required to update' });
+    }
+
     const updateData = { name, position, department, email, phone, dateOfBirth, placeOfBirth, tinNumber, role };
     
-    // If password is provided, verify current password first (unless admin is updating someone else)
+    // If password is provided, verify current password first (unless admins are updating someone else)
     if (password) {
       console.log('  Password update requested');
-      console.log('  Is admin:', req.user.role === 'admin');
-      console.log('  Is self-update:', req.user.staffId === req.params.id);
+      const isAdmin = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole);
+      const isSelfUpdate = userStaffId === req.params.id;
+      
       // Admins can set passwords without verification, but users updating their own account need current password
-      if (req.user.role !== 'admin' || req.user.staffId === req.params.id) {
+      if (!isAdmin || isSelfUpdate) {
         console.log('  Requiring current password verification');
         if (!currentPassword) {
           console.log('  Current password not provided');
@@ -535,9 +628,28 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Delete staff (Super Admin and Admin/HR only)
-app.delete('/staffs/:id', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Delete staff (Super Admin, Admin/HR, and Head Officers for their department)
+app.delete('/staffs/:id', verifyToken, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+
+    // Check permission
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can delete staff.' });
+    }
+
+    // Head Officers can only delete staff in their department
+    if (userRole === ROLES.HEAD_OFFICER) {
+      const staff = await Staff.findOne({ id: req.params.id });
+      if (!staff) {
+        return res.status(404).json({ message: 'Staff not found' });
+      }
+      if (staff.department !== userDepartment) {
+        return res.status(403).json({ message: 'You can only delete staff in your own department' });
+      }
+    }
+
     const deleted = await Staff.findOneAndDelete({ id: req.params.id });
     if (!deleted) {
       return res.status(404).json({ message: 'Staff not found' });
@@ -549,11 +661,27 @@ app.delete('/staffs/:id', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADM
   }
 });
 
-// Get pending staff registrations (Super Admin and Admin/HR only)
-app.get('/staffs-pending', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Get pending staff registrations (Super Admin, Admin/HR, and Head Officers for their department)
+app.get('/staffs-pending', verifyToken, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+
     console.log('Fetching pending staffs for user:', req.user);
-    const pendingStaffs = await Staff.find({ isApproved: false }).select('-password').sort({ createdAt: -1 });
+
+    // Check permission
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can view pending staffs.' });
+    }
+
+    let filter = { isApproved: false };
+
+    // Head Officers can only see pending staff in their department
+    if (userRole === ROLES.HEAD_OFFICER) {
+      filter.department = userDepartment;
+    }
+
+    const pendingStaffs = await Staff.find(filter).select('-password').sort({ createdAt: -1 });
     console.log('Found pending staffs:', pendingStaffs);
     res.json(pendingStaffs);
   } catch (error) {
@@ -582,12 +710,25 @@ app.get('/staffs-debug', verifyToken, async (req, res) => {
   }
 });
 
-// Approve staff registration (Super Admin and Admin/HR only)
-app.patch('/staffs/:id/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Approve staff registration (Super Admin, Admin/HR, and Head Officers for their department)
+app.patch('/staffs/:id/approve', verifyToken, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+
+    // Check permission
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can approve staff.' });
+    }
+
     const staff = await Staff.findOne({ id: req.params.id });
     if (!staff) {
       return res.status(404).json({ message: 'Staff not found' });
+    }
+
+    // Head Officers can only approve staff in their department
+    if (userRole === ROLES.HEAD_OFFICER && staff.department !== userDepartment) {
+      return res.status(403).json({ message: 'You can only approve staff in your own department' });
     }
 
     if (staff.isApproved) {
@@ -613,12 +754,25 @@ app.patch('/staffs/:id/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, RO
   }
 });
 
-// Reject staff registration (Super Admin and Admin/HR only)
-app.patch('/staffs/:id/reject', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Reject staff registration (Super Admin, Admin/HR, and Head Officers for their department)
+app.patch('/staffs/:id/reject', verifyToken, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+
+    // Check permission
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can reject staff.' });
+    }
+
     const staff = await Staff.findOne({ id: req.params.id });
     if (!staff) {
       return res.status(404).json({ message: 'Staff not found' });
+    }
+
+    // Head Officers can only reject staff in their department
+    if (userRole === ROLES.HEAD_OFFICER && staff.department !== userDepartment) {
+      return res.status(403).json({ message: 'You can only reject staff in your own department' });
     }
 
     if (staff.isApproved) {
@@ -633,9 +787,17 @@ app.patch('/staffs/:id/reject', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROL
   }
 });
 
-// Update staff e-signature permission (Super Admin and Admin/HR only)
-app.patch('/staffs/:id/esign-permission', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+// Update staff e-signature permission (Super Admin, Admin/HR, and Head Officers for their department)
+app.patch('/staffs/:id/esign-permission', verifyToken, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userDepartment = req.user.department;
+
+    // Check permission
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
+      return res.status(403).json({ message: 'Access denied. Only admins and head officers can update e-signature permissions.' });
+    }
+
     console.log('E-signature permission update - Staff ID:', req.params.id);
     console.log('E-signature permission update - Request body:', req.body);
     const { eSignPermission } = req.body;
@@ -644,6 +806,11 @@ app.patch('/staffs/:id/esign-permission', verifyToken, requireRole([ROLES.SUPER_
     if (!staff) {
       console.log('Staff not found with ID:', req.params.id);
       return res.status(404).json({ message: 'Staff not found' });
+    }
+
+    // Head Officers can only update e-signature permission for staff in their department
+    if (userRole === ROLES.HEAD_OFFICER && staff.department !== userDepartment) {
+      return res.status(403).json({ message: 'You can only update e-signature permissions for staff in your own department' });
     }
 
     const updatedStaff = await Staff.findOneAndUpdate(
