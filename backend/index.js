@@ -4,6 +4,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { ROLES, DEPARTMENTS, ROLE_DISPLAY_NAMES, ROLES_WITH_DEPARTMENTS, ROLE_HIERARCHY } = require('./constants');
 require('dotenv').config();
 
 
@@ -34,14 +35,26 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// Role-based Middleware
-const requireRole = (role) => {
+// Role-based Middleware (allows super_admin to bypass all checks)
+const requireRole = (allowedRoles) => {
+  // Convert single role string to array
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  
   return (req, res, next) => {
-    console.log('Role check - Required:', role, 'User role:', req.user?.role);
-    if (req.user.role !== role && req.user.role !== 'admin') {
-      console.log('Access denied - User role does not match required role');
-      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
+    const userRole = req.user?.role;
+    
+    // Super admin can access everything
+    if (userRole === ROLES.SUPER_ADMIN) {
+      next();
+      return;
     }
+    
+    // Check if user's role is in allowed roles
+    if (!roles.includes(userRole)) {
+      console.log(`Access denied - Required: ${roles.join(', ')}, User role: ${userRole}`);
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+    
     next();
   };
 };
@@ -66,11 +79,16 @@ const staffSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    enum: ['staff', 'admin'],
-    default: 'staff'
+    enum: Object.values(ROLES),
+    default: ROLES.STAFF,
+    required: true
+  },
+  department: {
+    type: String,
+    enum: DEPARTMENTS,
+    sparse: true
   },
   position: String,
-  department: String,
   phone: String,
   dateOfBirth: Date,
   placeOfBirth: String,
@@ -182,6 +200,32 @@ const ServiceRecord = mongoose.model('ServiceRecord', serviceRecordSchema);
 const LeaveRecord = mongoose.model('LeaveRecord', leaveRecordSchema);
 
 
+// ==================== SYSTEM CONFIGURATION ROUTES ====================
+
+// Get available roles and departments
+app.get('/system/roles-and-departments', (req, res) => {
+  try {
+    const rolesWithDepartments = {};
+    
+    Object.values(ROLES).forEach(role => {
+      rolesWithDepartments[role] = {
+        displayName: ROLE_DISPLAY_NAMES[role],
+        requiresDepartment: ROLES_WITH_DEPARTMENTS.includes(role),
+        departments: ROLES_WITH_DEPARTMENTS.includes(role) ? DEPARTMENTS : null
+      };
+    });
+
+    res.json({
+      roles: rolesWithDepartments,
+      departments: DEPARTMENTS
+    });
+  } catch (error) {
+    console.error('Error fetching roles and departments:', error);
+    res.status(500).json({ message: 'Failed to fetch roles and departments' });
+  }
+});
+
+
 // ==================== AUTHENTICATION ROUTES ====================
 
 // Register
@@ -198,8 +242,23 @@ app.post('/auth/register', async (req, res) => {
       return res.status(409).json({ message: 'Staff ID or email already exists' });
     }
 
+    // Validate role
+    const userRole = role || ROLES.STAFF;
+    if (!Object.values(ROLES).includes(userRole)) {
+      return res.status(400).json({ message: `Invalid role: ${userRole}` });
+    }
+
+    // Validate department if required by role
+    if (ROLES_WITH_DEPARTMENTS.includes(userRole)) {
+      if (!department || !DEPARTMENTS.includes(department)) {
+        return res.status(400).json({ message: `Department is required for ${ROLE_DISPLAY_NAMES[userRole]}. Valid departments: ${DEPARTMENTS.join(', ')}` });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const userRole = role || 'staff';
+    
+    // Super admin and admin_hr accounts are automatically approved
+    const isAutoApproved = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole);
     
     const newStaff = new Staff({
       id,
@@ -208,20 +267,21 @@ app.post('/auth/register', async (req, res) => {
       password: hashedPassword,
       role: userRole,
       position,
-      department,
+      department: ROLES_WITH_DEPARTMENTS.includes(userRole) ? department : null,
       phone,
       dateOfBirth,
       placeOfBirth,
       tinNumber,
-      // Admin accounts are automatically approved, staff accounts need approval
-      isApproved: userRole === 'admin' ? true : false,
+      isApproved: isAutoApproved,
+      approvedAt: isAutoApproved ? Date.now() : null,
+      approvedBy: isAutoApproved ? 'System (Auto-approved)' : null
     });
 
     await newStaff.save();
-    console.log('New staff registered with isApproved=false:', newStaff);
+    console.log('New staff registered:', { id, role: userRole, isApproved: isAutoApproved });
     
-    if (userRole === 'admin') {
-      res.status(201).json({ message: 'Admin account created successfully. You can login now.' });
+    if (isAutoApproved) {
+      res.status(201).json({ message: `${ROLE_DISPLAY_NAMES[userRole]} account created successfully. You can login now.` });
     } else {
       res.status(201).json({ message: 'Registration submitted successfully. Please wait for admin approval.' });
     }
@@ -250,22 +310,22 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Auto-approve admin accounts (in case they were created before this logic)
-    if (staff.role === 'admin' && !staff.isApproved) {
-      console.log('Auto-approving admin account:', staff.id);
+    // Auto-approve accounts with roles that don't require approval
+    if (!staff.isApproved && [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(staff.role)) {
+      console.log('Auto-approving account:', staff.id, 'Role:', staff.role);
       staff.isApproved = true;
       staff.approvedAt = Date.now();
-      staff.approvedBy = 'System (Auto-approved for admin)';
+      staff.approvedBy = 'System (Auto-approved)';
       await staff.save();
     }
 
-    // Check if account is approved (non-admin staff need approval)
-    if (!staff.isApproved && staff.role !== 'admin') {
+    // Check if account is approved
+    if (!staff.isApproved) {
       return res.status(403).json({ message: 'Your account is pending admin approval. Please wait for approval to login.' });
     }
 
     const token = jwt.sign(
-      { id: staff._id, staffId: staff.id, name: staff.name, email: staff.email, role: staff.role },
+      { id: staff._id, staffId: staff.id, name: staff.name, email: staff.email, role: staff.role, department: staff.department },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -278,6 +338,7 @@ app.post('/auth/login', async (req, res) => {
         staffId: staff.id,
         name: staff.name,
         email: staff.email,
+        department: staff.department,
         position: staff.position,
         department: staff.department,
         phone: staff.phone,
@@ -300,12 +361,28 @@ app.get('/auth/me', verifyToken, async (req, res) => {
   }
 });
 
-// Create Staff (Admin only)
-app.post('/staffs', verifyToken, requireRole('admin'), async (req, res) => {
+// Create Staff (Admin/HR and Super Admin only)
+app.post('/staffs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { id, name, email, password, role, position, department, phone, dateOfBirth, placeOfBirth, tinNumber, dateHired } = req.body;
 
   if (!id || !name || !email || !password) {
     return res.status(400).json({ message: 'ID, name, email, and password are required' });
+  }
+
+  if (!role) {
+    return res.status(400).json({ message: 'Role is required' });
+  }
+
+  // Validate role
+  if (!Object.values(ROLES).includes(role)) {
+    return res.status(400).json({ message: `Invalid role: ${role}. Valid roles: ${Object.keys(ROLES).join(', ')}` });
+  }
+
+  // Validate department if required by role
+  if (ROLES_WITH_DEPARTMENTS.includes(role)) {
+    if (!department || !DEPARTMENTS.includes(department)) {
+      return res.status(400).json({ message: `Department is required for ${ROLE_DISPLAY_NAMES[role]}. Valid departments: ${DEPARTMENTS.join(', ')}` });
+    }
   }
 
   try {
@@ -320,15 +397,17 @@ app.post('/staffs', verifyToken, requireRole('admin'), async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: role || 'staff',
+      role,
       position,
-      department,
+      department: ROLES_WITH_DEPARTMENTS.includes(role) ? department : null,
       phone,
       dateOfBirth,
       placeOfBirth,
       tinNumber,
       dateHired,
       isApproved: true,
+      approvedAt: Date.now(),
+      approvedBy: req.user.name
     });
 
     await newStaff.save();
@@ -339,8 +418,8 @@ app.post('/staffs', verifyToken, requireRole('admin'), async (req, res) => {
   }
 });
 
-// Get all staffs (Admin only)
-app.get('/staffs', verifyToken, requireRole('admin'), async (req, res) => {
+// Get all staffs (Super Admin and Admin/HR only)
+app.get('/staffs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const staffs = await Staff.find().select('-password');
     res.json(staffs);
@@ -441,8 +520,8 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Delete staff (Admin only)
-app.delete('/staffs/:id', verifyToken, requireRole('admin'), async (req, res) => {
+// Delete staff (Super Admin and Admin/HR only)
+app.delete('/staffs/:id', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const deleted = await Staff.findOneAndDelete({ id: req.params.id });
     if (!deleted) {
@@ -455,8 +534,8 @@ app.delete('/staffs/:id', verifyToken, requireRole('admin'), async (req, res) =>
   }
 });
 
-// Get pending staff registrations (Admin only)
-app.get('/staffs-pending', verifyToken, requireRole('admin'), async (req, res) => {
+// Get pending staff registrations (Super Admin and Admin/HR only)
+app.get('/staffs-pending', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     console.log('Fetching pending staffs for user:', req.user);
     const pendingStaffs = await Staff.find({ isApproved: false }).select('-password').sort({ createdAt: -1 });
@@ -488,8 +567,8 @@ app.get('/staffs-debug', verifyToken, async (req, res) => {
   }
 });
 
-// Approve staff registration (Admin only)
-app.patch('/staffs/:id/approve', verifyToken, requireRole('admin'), async (req, res) => {
+// Approve staff registration (Super Admin and Admin/HR only)
+app.patch('/staffs/:id/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const staff = await Staff.findOne({ id: req.params.id });
     if (!staff) {
@@ -519,8 +598,8 @@ app.patch('/staffs/:id/approve', verifyToken, requireRole('admin'), async (req, 
   }
 });
 
-// Reject staff registration (Admin only)
-app.patch('/staffs/:id/reject', verifyToken, requireRole('admin'), async (req, res) => {
+// Reject staff registration (Super Admin and Admin/HR only)
+app.patch('/staffs/:id/reject', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const staff = await Staff.findOne({ id: req.params.id });
     if (!staff) {
@@ -539,8 +618,8 @@ app.patch('/staffs/:id/reject', verifyToken, requireRole('admin'), async (req, r
   }
 });
 
-// Update staff e-signature permission (Admin only)
-app.patch('/staffs/:id/esign-permission', verifyToken, requireRole('admin'), async (req, res) => {
+// Update staff e-signature permission (Super Admin and Admin/HR only)
+app.patch('/staffs/:id/esign-permission', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     console.log('E-signature permission update - Staff ID:', req.params.id);
     console.log('E-signature permission update - Request body:', req.body);
@@ -619,8 +698,8 @@ app.post('/leaves', verifyToken, async (req, res) => {
   }
 });
 
-// Get all leave requests (Admin only)
-app.get('/leaves', verifyToken, requireRole('admin'), async (req, res) => {
+// Get all leave requests (Super Admin and Admin/HR only)
+app.get('/leaves', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const status = req.query.status;
     const filter = status ? { status } : {};
@@ -708,8 +787,8 @@ app.put('/leaves/:leaveId', verifyToken, async (req, res) => {
   }
 });
 
-// Approve leave request (Admin only)
-app.patch('/leaves/:leaveId/approve', verifyToken, requireRole('admin'), async (req, res) => {
+// Approve leave request (Super Admin and Admin/HR only)
+app.patch('/leaves/:leaveId/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { approvedBy, remarks } = req.body;
 
   if (!approvedBy) {
@@ -742,8 +821,8 @@ app.patch('/leaves/:leaveId/approve', verifyToken, requireRole('admin'), async (
   }
 });
 
-// Reject leave request (Admin only)
-app.patch('/leaves/:leaveId/reject', verifyToken, requireRole('admin'), async (req, res) => {
+// Reject leave request (Super Admin and Admin/HR only)
+app.patch('/leaves/:leaveId/reject', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { approvedBy, remarks } = req.body;
 
   if (!approvedBy) {
@@ -853,8 +932,8 @@ app.post('/travel-orders', verifyToken, async (req, res) => {
   }
 });
 
-// Get all travel orders (Admin only)
-app.get('/travel-orders', verifyToken, requireRole('admin'), async (req, res) => {
+// Get all travel orders (Super Admin and Admin/HR only)
+app.get('/travel-orders', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const status = req.query.status;
     const filter = status ? { status } : {};
@@ -944,8 +1023,8 @@ app.put('/travel-orders/:travelOrderId', verifyToken, async (req, res) => {
   }
 });
 
-// Approve travel order (Admin only)
-app.patch('/travel-orders/:travelOrderId/approve', verifyToken, requireRole('admin'), async (req, res) => {
+// Approve travel order (Super Admin and Admin/HR only)
+app.patch('/travel-orders/:travelOrderId/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { approvedBy, remarks } = req.body;
 
   if (!approvedBy) {
@@ -978,8 +1057,8 @@ app.patch('/travel-orders/:travelOrderId/approve', verifyToken, requireRole('adm
   }
 });
 
-// Reject travel order (Admin only)
-app.patch('/travel-orders/:travelOrderId/reject', verifyToken, requireRole('admin'), async (req, res) => {
+// Reject travel order (Super Admin and Admin/HR only)
+app.patch('/travel-orders/:travelOrderId/reject', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { approvedBy, remarks } = req.body;
 
   if (!approvedBy) {
@@ -1076,8 +1155,8 @@ app.delete('/travel-orders/:travelOrderId', verifyToken, async (req, res) => {
 
 // ==================== SERVICE RECORD ROUTES ====================
 
-// Create service record (Admin only)
-app.post('/service-records', verifyToken, requireRole('admin'), async (req, res) => {
+// Create service record (Super Admin and Admin/HR only)
+app.post('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   const { staffId, staffName, designation, status, salary, station, branch, serviceFrom, serviceTo, leaveWithoutPayFrom, leaveWithoutPayTo, remarks } = req.body;
 
   if (!staffId || !serviceFrom) {
@@ -1110,8 +1189,8 @@ app.post('/service-records', verifyToken, requireRole('admin'), async (req, res)
   }
 });
 
-// Get all service records (Admin only)
-app.get('/service-records', verifyToken, requireRole('admin'), async (req, res) => {
+// Get all service records (Super Admin and Admin/HR only)
+app.get('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const records = await ServiceRecord.find();
     res.json(records);
@@ -1157,8 +1236,8 @@ app.get('/service-record/:recordId', verifyToken, async (req, res) => {
   }
 });
 
-// Update service record (Admin only)
-app.put('/service-records/:recordId', verifyToken, requireRole('admin'), async (req, res) => {
+// Update service record (Super Admin and Admin/HR only)
+app.put('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const { designation, status, salary, station, branch, serviceTo, leaveWithoutPayFrom, leaveWithoutPayTo, remarks } = req.body;
 
@@ -1190,8 +1269,8 @@ app.put('/service-records/:recordId', verifyToken, requireRole('admin'), async (
   }
 });
 
-// Delete service record (Admin only)
-app.delete('/service-records/:recordId', verifyToken, requireRole('admin'), async (req, res) => {
+// Delete service record (Super Admin and Admin/HR only)
+app.delete('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const deleted = await ServiceRecord.findOneAndDelete({ recordId: req.params.recordId });
     if (!deleted) {
@@ -1229,8 +1308,8 @@ app.get('/leave-records/staff/:staffId', verifyToken, async (req, res) => {
   }
 });
 
-// Get all leave records (Admin only)
-app.get('/leave-records', verifyToken, requireRole('admin'), async (req, res) => {
+// Get all leave records (Super Admin and Admin/HR only)
+app.get('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const records = await LeaveRecord.find().sort({ staffId: 1, period: -1 });
     res.status(200).json({ data: records });
@@ -1240,8 +1319,8 @@ app.get('/leave-records', verifyToken, requireRole('admin'), async (req, res) =>
   }
 });
 
-// Create leave record (Admin only)
-app.post('/leave-records', verifyToken, requireRole('admin'), async (req, res) => {
+// Create leave record (Super Admin and Admin/HR only)
+app.post('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const { staffId, staffName, period, particulars, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto } = req.body;
     
@@ -1275,8 +1354,8 @@ app.post('/leave-records', verifyToken, requireRole('admin'), async (req, res) =
   }
 });
 
-// Update leave record (Admin only)
-app.put('/leave-records/:recordId', verifyToken, requireRole('admin'), async (req, res) => {
+// Update leave record (Super Admin and Admin/HR only)
+app.put('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const { recordId } = req.params;
     const { period, particulars, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto } = req.body;
@@ -1307,8 +1386,8 @@ app.put('/leave-records/:recordId', verifyToken, requireRole('admin'), async (re
   }
 });
 
-// Delete leave record (Admin only)
-app.delete('/leave-records/:recordId', verifyToken, requireRole('admin'), async (req, res) => {
+// Delete leave record (Super Admin and Admin/HR only)
+app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
   try {
     const { recordId } = req.params;
     console.log('Attempting to delete leave record with ID:', recordId);
