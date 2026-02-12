@@ -9,38 +9,7 @@ export default function Login({ setUser }) {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const glowingStyle = `
-    @keyframes glow {
-      0% {
-        box-shadow: 
-          0 0 10px rgba(59, 130, 246, 0.8),
-          0 0 20px rgba(59, 130, 246, 0.6),
-          0 0 30px rgba(59, 130, 246, 0.4),
-          0 0 40px rgba(59, 130, 246, 0.2),
-          0 20px 40px rgba(0, 0, 0, 0.2);
-      }
-      50% {
-        box-shadow: 
-          0 0 20px rgba(59, 130, 246, 1),
-          0 0 30px rgba(59, 130, 246, 0.8),
-          0 0 50px rgba(59, 130, 246, 0.6),
-          0 0 70px rgba(59, 130, 246, 0.4),
-          0 20px 40px rgba(0, 0, 0, 0.3);
-      }
-      100% {
-        box-shadow: 
-          0 0 10px rgba(59, 130, 246, 0.8),
-          0 0 20px rgba(59, 130, 246, 0.6),
-          0 0 30px rgba(59, 130, 246, 0.4),
-          0 0 40px rgba(59, 130, 246, 0.2),
-          0 20px 40px rgba(0, 0, 0, 0.2);
-      }
-    }
-    .glowing-form {
-      animation: glow 3s ease-in-out infinite;
-      border: 2px solid rgba(59, 130, 246, 0.5);
-    }
-  `;
+
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -84,19 +53,18 @@ export default function Login({ setUser }) {
     <div 
       className="min-h-screen flex items-center justify-center p-4"
       style={{
-        backgroundImage: `linear-gradient(rgba(59, 131, 246, 0.38), rgba(37, 99, 235, 0.8)), url('/login.jpg')`,
+        backgroundImage: `linear-gradient(rgba(138, 219, 246, 0.48), rgba(255, 255, 255, 0.2)), url('/login.jpg')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed'
       }}
     >
-      <style>{glowingStyle}</style>
-      <div className="bg-white rounded-lg p-8 w-full max-w-md backdrop-blur-sm glowing-form">
+      <div className="bg-white rounded-lg p-8 w-full max-w-md backdrop-blur-sm" style={{ opacity: 0.85 }}>
         <div className="text-center mb-8">
           <img 
             src="/logo.PNG" 
             alt="LALA LGU Logo" 
-            className="w-20 h-20 mx-auto mb-4 object-contain"
+            className="w-24 h-24 mx-auto mb-4 object-contain"
           />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Leave & Travel System</h1>
           <p className="text-gray-600">Login to your account</p>
@@ -151,6 +119,12 @@ export default function Login({ setUser }) {
             Don't have an account?{' '}
             <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium">
               Register here
+            </Link>
+          </p>
+          <p className="text-gray-600 text-sm mt-2">
+            Need to file requirements?{' '}
+            <Link to="/submit-personal-data-sheet" className="text-blue-600 hover:text-blue-700 font-medium">
+              Submit personal data sheet
             </Link>
           </p>
         </div>

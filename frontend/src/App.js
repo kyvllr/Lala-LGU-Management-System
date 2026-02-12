@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate } f
 import { FiLogOut, FiMenu, FiX } from 'react-icons/fi';
 import { MdDashboard, MdGroup, MdPersonAdd, MdApproval, MdFlightTakeoff } from 'react-icons/md';
 import { TbFileText, TbClipboardList, TbPlane, TbTicket, TbBell, TbX, TbUser, TbFile } from 'react-icons/tb';
-import { leaveAPI, travelOrderAPI, staffAPI } from './api';
+import { leaveAPI, personalDataSheetAPI, travelOrderAPI, staffAPI } from './api';
 import { clearLeaveRecordLocalStorage } from './clearLocalStorage';
 import Dashboard from './pages/Dashboard';
 import StaffList from './pages/StaffList';
@@ -20,6 +20,8 @@ import EmployeeLeaveRecord from './pages/EmployeeLeaveRecord';
 import StaffLeaveRecordDetail from './pages/StaffLeaveRecordDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import SubmitPersonalDataSheet from './pages/SubmitPersonalDataSheet';
+import ReviewPersonalDataSheets from './pages/ReviewPersonalDataSheets';
 import PrivateRoute from './components/PrivateRoute';
 import { isAdmin, normalizeRole } from './constants';
 
@@ -133,6 +135,24 @@ function AppContent() {
             count: travelRes.data.length,
             link: '/approve-travel',
             color: 'bg-red-100 border-l-4 border-red-500',
+            receivedAt: now
+          });
+        }
+
+        const pdsRes = await personalDataSheetAPI.getAll('Pending');
+        if (pdsRes.data.length > 0) {
+          const names = pdsRes.data
+            .map(p => [p.firstName, p.middleName, p.surname].filter(Boolean).join(' '))
+            .slice(0, 2)
+            .join(', ');
+          const morePds = pdsRes.data.length > 2 ? ` +${pdsRes.data.length - 2} more` : '';
+          notifs.push({
+            id: 'pending-pds',
+            type: 'Personal Data Sheet',
+            message: `${pdsRes.data.length} pending from: ${names}${morePds}`,
+            count: pdsRes.data.length,
+            link: '/review-personal-data-sheets',
+            color: 'bg-purple-100 border-l-4 border-purple-500',
             receivedAt: now
           });
         }
@@ -405,6 +425,7 @@ function AppContent() {
       <Routes>
         <Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/submit-personal-data-sheet" element={<SubmitPersonalDataSheet />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -452,6 +473,14 @@ function AppContent() {
               >
                 <MdApproval size={20} />
                 {sidebarOpen && <span>Account Requests</span>}
+              </Link>
+              <Link 
+                to="/review-personal-data-sheets" 
+                className={`flex items-center gap-3 px-4 py-3 rounded hover:bg-blue-600 transition ${!sidebarOpen && 'justify-center'}`}
+                title="PDS Requests"
+              >
+                <MdApproval size={20} />
+                {sidebarOpen && <span>PDS Requests</span>}
               </Link>
               <Link 
                 to="/approve-leaves" 
@@ -692,6 +721,14 @@ function AppContent() {
               element={
                 <PrivateRoute requiredRole="admin">
                   <ApproveLeavesAdmin />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/review-personal-data-sheets" 
+              element={
+                <PrivateRoute requiredRole="admin">
+                  <ReviewPersonalDataSheets />
                 </PrivateRoute>
               } 
             />

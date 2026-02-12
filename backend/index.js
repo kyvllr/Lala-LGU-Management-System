@@ -246,12 +246,111 @@ const leaveRecordSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+// Define Personal Data Sheet Schema
+const personalDataSheetSchema = new mongoose.Schema({
+  pdsId: { type: String, required: true, unique: true },
+  surname: { type: String, required: true },
+  firstName: { type: String, required: true },
+  middleName: String,
+  nameExtension: String,
+  dateOfBirth: Date,
+  placeOfBirth: String,
+  sexAtBirth: { type: String, enum: ['Male', 'Female'] },
+  civilStatus: { type: String, enum: ['Single', 'Married', 'Widowed', 'Separated', 'Other'] },
+  citizenship: {
+    type: {
+      type: String,
+      enum: ['Filipino', 'Dual Citizenship'],
+      default: 'Filipino',
+    },
+    dualCitizenshipMode: {
+      type: String,
+      enum: ['By Birth', 'By Naturalization'],
+    },
+    dualCitizenshipCountry: String,
+  },
+  residentialAddress: {
+    houseBlockLotNo: String,
+    street: String,
+    subdivisionVillage: String,
+    barangay: String,
+    cityMunicipality: String,
+    province: String,
+    zipCode: String,
+  },
+  permanentAddress: {
+    houseBlockLotNo: String,
+    street: String,
+    subdivisionVillage: String,
+    barangay: String,
+    cityMunicipality: String,
+    province: String,
+    zipCode: String,
+  },
+  telephone: String,
+  mobile: { type: String, required: true },
+  email: { type: String, required: true },
+  familyBackground: {
+    spouse: {
+      surname: String,
+      firstName: String,
+      middleName: String,
+      nameExtension: String,
+      occupation: String,
+      employerBusinessName: String,
+      businessAddress: String,
+      telephone: String,
+    },
+    father: {
+      surname: String,
+      firstName: String,
+      middleName: String,
+      nameExtension: String,
+    },
+    mother: {
+      maidenName: String,
+      surname: String,
+      firstName: String,
+      middleName: String,
+    },
+    children: [
+      {
+        name: String,
+        dateOfBirth: Date,
+      },
+    ],
+  },
+  educationalBackground: [
+    {
+      level: String,
+      schoolName: String,
+      basicEducationDegreeCourse: String,
+      periodFrom: String,
+      periodTo: String,
+      highestLevelUnitsEarned: String,
+      yearGraduated: String,
+      scholarshipAcademicHonorsReceived: String,
+    },
+  ],
+  status: {
+    type: String,
+    enum: ['Pending', 'Approved', 'Rejected'],
+    default: 'Pending'
+  },
+  remarks: String,
+  reviewedBy: String,
+  reviewedAt: Date,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
 
 const Staff = mongoose.model('Staff', staffSchema);
 const Leave = mongoose.model('Leave', leaveSchema);
 const TravelOrder = mongoose.model('TravelOrder', travelOrderSchema);
 const ServiceRecord = mongoose.model('ServiceRecord', serviceRecordSchema);
 const LeaveRecord = mongoose.model('LeaveRecord', leaveRecordSchema);
+const PersonalDataSheet = mongoose.model('PersonalDataSheet', personalDataSheetSchema);
 
 
 // ==================== SYSTEM CONFIGURATION ROUTES ====================
@@ -438,6 +537,165 @@ app.get('/auth/me', verifyToken, async (req, res) => {
     res.json(staff);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch user info' });
+  }
+});
+
+
+// ==================== PERSONAL DATA SHEET ROUTES ====================
+
+// Submit PDS (public)
+app.post('/personal-data-sheets', async (req, res) => {
+  const {
+    surname,
+    firstName,
+    middleName,
+    nameExtension,
+    dateOfBirth,
+    placeOfBirth,
+    sexAtBirth,
+    civilStatus,
+    citizenship,
+    residentialAddress,
+    permanentAddress,
+    telephone,
+    mobile,
+    email,
+    familyBackground,
+    educationalBackground,
+  } = req.body;
+
+  if (!surname || !firstName || !mobile || !email) {
+    return res.status(400).json({ message: 'Surname, first name, mobile number, and email are required' });
+  }
+
+  const normalizedCitizenship = typeof citizenship === 'string'
+    ? { type: citizenship }
+    : (citizenship || { type: 'Filipino' });
+
+  if (
+    normalizedCitizenship.type === 'Dual Citizenship' &&
+    (!normalizedCitizenship.dualCitizenshipMode || !normalizedCitizenship.dualCitizenshipCountry)
+  ) {
+    return res.status(400).json({ message: 'Dual citizenship requires type and country selection' });
+  }
+
+  const normalizeAddress = (address) => {
+    if (!address) {
+      return {
+        houseBlockLotNo: '',
+        street: '',
+        subdivisionVillage: '',
+        barangay: '',
+        cityMunicipality: '',
+        province: '',
+        zipCode: '',
+      };
+    }
+
+    if (typeof address === 'string') {
+      return {
+        houseBlockLotNo: '',
+        street: '',
+        subdivisionVillage: '',
+        barangay: '',
+        cityMunicipality: address,
+        province: '',
+        zipCode: '',
+      };
+    }
+
+    return address;
+  };
+
+  try {
+    const countToday = await PersonalDataSheet.countDocuments({
+      createdAt: {
+        $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+      },
+    });
+
+    const pdsId = `PDS-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(countToday + 1).padStart(4, '0')}`;
+
+    const pds = new PersonalDataSheet({
+      pdsId,
+      surname,
+      firstName,
+      middleName,
+      nameExtension,
+      dateOfBirth,
+      placeOfBirth,
+      sexAtBirth,
+      civilStatus,
+      citizenship: normalizedCitizenship,
+      residentialAddress: normalizeAddress(residentialAddress),
+      permanentAddress: normalizeAddress(permanentAddress),
+      telephone,
+      mobile,
+      email,
+      familyBackground,
+      educationalBackground,
+      status: 'Pending',
+    });
+
+    await pds.save();
+    res.status(201).json({ message: 'Personal Data Sheet submitted successfully', pds });
+  } catch (error) {
+    console.error('Error submitting PDS:', error);
+    res.status(500).json({ message: 'Failed to submit Personal Data Sheet' });
+  }
+});
+
+// Get PDS submissions (admin)
+app.get('/personal-data-sheets', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+
+    if (status && ['Pending', 'Approved', 'Rejected'].includes(status)) {
+      filter.status = status;
+    }
+
+    const sheets = await PersonalDataSheet.find(filter).sort({ createdAt: -1 });
+    res.json(sheets);
+  } catch (error) {
+    console.error('Error fetching PDS submissions:', error);
+    res.status(500).json({ message: 'Failed to fetch Personal Data Sheets' });
+  }
+});
+
+// Review PDS submission (admin)
+app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const { pdsId } = req.params;
+  const { status, remarks } = req.body;
+
+  if (!['Approved', 'Rejected'].includes(status)) {
+    return res.status(400).json({ message: 'Review status must be Approved or Rejected' });
+  }
+
+  try {
+    const updated = await PersonalDataSheet.findOneAndUpdate(
+      { pdsId },
+      {
+        $set: {
+          status,
+          remarks: remarks || '',
+          reviewedBy: req.user.name,
+          reviewedAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: 'PDS submission not found' });
+    }
+
+    res.json({ message: `PDS marked as ${status}`, pds: updated });
+  } catch (error) {
+    console.error('Error reviewing PDS submission:', error);
+    res.status(500).json({ message: 'Failed to review Personal Data Sheet' });
   }
 });
 

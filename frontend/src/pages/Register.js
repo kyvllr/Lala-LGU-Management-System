@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api';
+import api, { systemAPI } from '../api';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -11,6 +11,7 @@ export default function Register() {
     email: '',
     password: '',
     confirmPassword: '',
+    role: '',
     position: '',
     department: '',
     phone: '',
@@ -18,14 +19,39 @@ export default function Register() {
     placeOfBirth: '',
     tinNumber: '',
   });
+  const [rolesAndDepartments, setRolesAndDepartments] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchRolesAndDepartments = async () => {
+      try {
+        const response = await systemAPI.getRolesAndDepartments();
+        setRolesAndDepartments(response.data);
+      } catch (err) {
+        console.error('Failed to fetch roles and departments:', err);
+      }
+    };
+
+    fetchRolesAndDepartments();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'role') {
+      const requiresDepartment = rolesAndDepartments?.roles?.[value]?.requiresDepartment;
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        department: requiresDepartment ? prev.department : '',
+      }));
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -39,8 +65,15 @@ export default function Register() {
     setLoading(true);
 
     // Validation
-    if (!formData.staffId || !formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+    if (!formData.staffId || !formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.role) {
       setError('Please fill in all required fields');
+      setLoading(false);
+      return;
+    }
+
+    const selectedRoleData = rolesAndDepartments?.roles?.[formData.role];
+    if (selectedRoleData?.requiresDepartment && !formData.department) {
+      setError('Department is required for the selected role');
       setLoading(false);
       return;
     }
@@ -64,9 +97,13 @@ export default function Register() {
         name: fullName,
         email: formData.email,
         password: formData.password,
+        role: formData.role,
         position: formData.position,
         department: formData.department,
         phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+        placeOfBirth: formData.placeOfBirth,
+        tinNumber: formData.tinNumber,
       });
 
       setSuccess('Registration submitted successfully! Please wait for admin approval to login.');
@@ -81,55 +118,17 @@ export default function Register() {
 
   // Show success page after submission
   if (submitted) {
-    const glowingStyle = `
-      @keyframes glow {
-        0% {
-          box-shadow: 
-            0 0 10px rgba(59, 130, 246, 0.8),
-            0 0 20px rgba(59, 130, 246, 0.6),
-            0 0 30px rgba(59, 130, 246, 0.4),
-            0 0 40px rgba(59, 130, 246, 0.2),
-            0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-        50% {
-          box-shadow: 
-            0 0 20px rgba(59, 130, 246, 1),
-            0 0 30px rgba(59, 130, 246, 0.8),
-            0 0 50px rgba(59, 130, 246, 0.6),
-            0 0 70px rgba(59, 130, 246, 0.4),
-            0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-        100% {
-          box-shadow: 
-            0 0 10px rgba(59, 130, 246, 0.8),
-            0 0 20px rgba(59, 130, 246, 0.6),
-            0 0 30px rgba(59, 130, 246, 0.4),
-            0 0 40px rgba(59, 130, 246, 0.2),
-            0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-      }
-      .glowing-form {
-        animation: glow 3s ease-in-out infinite;
-        border: 2px solid rgba(59, 130, 246, 0.5);
-      }
-    `;
-
     return (
       <div 
         className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
         style={{
-          backgroundImage: 'linear-gradient(rgba(59, 131, 246, 0.36), rgba(37, 100, 235, 0.73)), url(/login.jpg)',
+          backgroundImage: `linear-gradient(rgba(138, 219, 246, 0.48), rgba(255, 255, 255, 0.2)), url('/login.jpg')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed',
         }}
       >
-        {/* Blue gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/40 via-blue-500/40 to-blue-700/40" />
-        
-        <style>{glowingStyle}</style>
-        
-        <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md text-center relative glowing-form">
+        <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md text-center relative" style={{ opacity: 0.85 }}>
           <div className="mb-6">
             <div className="inline-block bg-green-100 text-green-600 rounded-full p-4 mb-4">
               <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
@@ -183,55 +182,17 @@ export default function Register() {
     );
   }
 
-  const glowingStyle = `
-    @keyframes glow {
-      0% {
-        box-shadow: 
-          0 0 10px rgba(59, 130, 246, 0.8),
-          0 0 20px rgba(59, 130, 246, 0.6),
-          0 0 30px rgba(59, 130, 246, 0.4),
-          0 0 40px rgba(59, 130, 246, 0.2),
-          0 20px 40px rgba(0, 0, 0, 0.2);
-      }
-      50% {
-        box-shadow: 
-          0 0 20px rgba(59, 130, 246, 1),
-          0 0 30px rgba(59, 130, 246, 0.8),
-          0 0 50px rgba(59, 130, 246, 0.6),
-          0 0 70px rgba(59, 130, 246, 0.4),
-          0 20px 40px rgba(0, 0, 0, 0.3);
-      }
-      100% {
-        box-shadow: 
-          0 0 10px rgba(59, 130, 246, 0.8),
-          0 0 20px rgba(59, 130, 246, 0.6),
-          0 0 30px rgba(59, 130, 246, 0.4),
-          0 0 40px rgba(59, 130, 246, 0.2),
-          0 20px 40px rgba(0, 0, 0, 0.2);
-      }
-    }
-    .glowing-form {
-      animation: glow 3s ease-in-out infinite;
-      border: 2px solid rgba(59, 130, 246, 0.5);
-    }
-  `;
-
   return (
     <div 
       className="min-h-screen flex items-center justify-center p-4 py-8 relative overflow-hidden"
       style={{
-        backgroundImage: 'linear-gradient(rgba(59, 131, 246, 0.36), rgba(37, 100, 235, 0.73)), url(/login.jpg)',
+        backgroundImage: `linear-gradient(rgba(138, 219, 246, 0.48), rgba(255, 255, 255, 0.2)), url('/login.jpg')`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed',
       }}
     >
-      {/* Blue gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-600/40 via-blue-500/40 to-blue-700/40" />
-      
-      <style>{glowingStyle}</style>
-      
-      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative glowing-form">
+      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative" style={{ opacity: 0.95 }}>
         <div className="text-center mb-8">
           <img 
             src="/logo.PNG" 
@@ -254,7 +215,7 @@ export default function Register() {
           </div>
         )}
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Staff ID *
@@ -336,6 +297,36 @@ export default function Register() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Role *
+            </label>
+            {rolesAndDepartments ? (
+              <select
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+                required
+              >
+                <option value="">Select Role</option>
+                {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+                  <option key={roleKey} value={roleKey}>
+                    {roleData.displayName}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                disabled
+                value="Loading roles..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Position
             </label>
             <input
@@ -349,20 +340,28 @@ export default function Register() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Department
-            </label>
-            <input
-              type="text"
-              name="department"
-              value={formData.department}
-              onChange={handleChange}
-              placeholder="e.g., Finance"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
+          {rolesAndDepartments?.roles?.[formData.role]?.requiresDepartment && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Department *
+              </label>
+              <select
+                name="department"
+                value={formData.department}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+                required
+              >
+                <option value="">Select Department</option>
+                {rolesAndDepartments.departments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -458,7 +457,7 @@ export default function Register() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full md:col-span-2 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             {loading ? 'Registering...' : 'Register'}
           </button>

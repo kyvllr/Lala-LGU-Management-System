@@ -63,6 +63,13 @@ export const systemAPI = {
   getRolesAndDepartments: () => api.get('/system/roles-and-departments'),
 };
 
+// Personal Data Sheet API
+export const personalDataSheetAPI = {
+  submit: (data) => api.post('/personal-data-sheets', data),
+  getAll: (status) => api.get('/personal-data-sheets', { params: { status } }),
+  review: (pdsId, status, remarks = '') => api.patch(`/personal-data-sheets/${pdsId}/review`, { status, remarks }),
+};
+
 // Leave API
 export const leaveAPI = {
   getAll: (status) => api.get('/leaves', { params: { status } }),
