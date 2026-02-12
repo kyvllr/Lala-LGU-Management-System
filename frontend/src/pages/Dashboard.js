@@ -4,6 +4,7 @@ import { MdGroup, MdApproval, MdFlightTakeoff } from 'react-icons/md';
 import { TbClockHour2, TbClipboardList, TbCheck, TbX } from 'react-icons/tb';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 import { leaveAPI, travelOrderAPI, staffAPI, leaveRecordAPI } from '../api';
+import { isAdmin } from '../constants';
 
 function Dashboard({ userRole, staffId }) {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ function Dashboard({ userRole, staffId }) {
         }
         setCurrentStaffId(tempStaffId);
 
-        if (userRole === 'admin') {
+        if (isAdmin(userRole)) {
           const staffRes = await staffAPI.getAll();
           const leavesRes = await leaveAPI.getAll();
           const travelRes = await travelOrderAPI.getAll();
@@ -221,7 +222,7 @@ function Dashboard({ userRole, staffId }) {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Total Staff - Admin Only */}
-        {userRole === 'admin' && (
+        {isAdmin(userRole) && (
           <button
             onClick={() => handleCardClick('/staffs')}
             className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl hover:scale-105 transition transform cursor-pointer border-l-4 border-blue-600"
@@ -238,7 +239,7 @@ function Dashboard({ userRole, staffId }) {
         
         {/* Pending Leaves */}
         <button
-          onClick={() => handleCardClick(userRole === 'admin' ? '/approve-leaves' : '/my-leaves', userRole === 'admin' ? null : 'Pending')}
+          onClick={() => handleCardClick(isAdmin(userRole) ? '/approve-leaves' : '/my-leaves', isAdmin(userRole) ? null : 'Pending')}
           className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl hover:scale-105 transition transform cursor-pointer border-l-4 border-yellow-500"
         >
           <div className="flex items-center justify-between">
@@ -252,7 +253,7 @@ function Dashboard({ userRole, staffId }) {
         
         {/* Approved Leaves */}
         <button
-          onClick={() => handleCardClick(userRole === 'admin' ? '/approve-leaves' : '/my-leaves', userRole === 'admin' ? null : 'Approved')}
+          onClick={() => handleCardClick(isAdmin(userRole) ? '/approve-leaves' : '/my-leaves', isAdmin(userRole) ? null : 'Approved')}
           className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl hover:scale-105 transition transform cursor-pointer border-l-4 border-green-600"
         >
           <div className="flex items-center justify-between">
@@ -266,7 +267,7 @@ function Dashboard({ userRole, staffId }) {
         
         {/* Pending Travel Orders */}
         <button
-          onClick={() => handleCardClick(userRole === 'admin' ? '/approve-travel-orders' : '/my-travel-orders', userRole === 'admin' ? null : 'Pending')}
+          onClick={() => handleCardClick(isAdmin(userRole) ? '/approve-travel-orders' : '/my-travel-orders', isAdmin(userRole) ? null : 'Pending')}
           className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl hover:scale-105 transition transform cursor-pointer border-l-4 border-orange-500"
         >
           <div className="flex items-center justify-between">
@@ -280,7 +281,7 @@ function Dashboard({ userRole, staffId }) {
         
         {/* Approved Travel Orders */}
         <button
-          onClick={() => handleCardClick(userRole === 'admin' ? '/approve-travel-orders' : '/my-travel-orders', userRole === 'admin' ? null : 'Approved')}
+          onClick={() => handleCardClick(isAdmin(userRole) ? '/approve-travel-orders' : '/my-travel-orders', isAdmin(userRole) ? null : 'Approved')}
           className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl hover:scale-105 transition transform cursor-pointer border-l-4 border-indigo-600"
         >
           <div className="flex items-center justify-between">
@@ -294,7 +295,7 @@ function Dashboard({ userRole, staffId }) {
       </div>
 
       {/* Analytics Section - Admin Only */}
-      {userRole === 'admin' && (
+      {isAdmin(userRole) && (
         <div className="mt-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Analytics & Insights</h2>
           

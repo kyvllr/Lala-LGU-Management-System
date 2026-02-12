@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveAPI } from '../api';
+import { isAdmin, normalizeRole } from '../constants';
 
 function EmployeeLeaveRecord() {
   const [user, setUser] = useState(null);
@@ -14,7 +15,7 @@ function EmployeeLeaveRecord() {
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUser(storedUser);
+    setUser(storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser);
     
     // If staff user, redirect directly to their leave record
     if (storedUser.role === 'staff') {
@@ -31,7 +32,7 @@ function EmployeeLeaveRecord() {
       setError('');
       const storedUser = JSON.parse(localStorage.getItem('user'));
 
-      if (storedUser.role === 'admin') {
+      if (isAdmin(storedUser.role)) {
         // Admin sees all approved staff
         console.log('[EmployeeLeaveRecord] Fetching all staff...');
         const staffRes = await staffAPI.getAll();

@@ -21,6 +21,7 @@ import StaffLeaveRecordDetail from './pages/StaffLeaveRecordDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import PrivateRoute from './components/PrivateRoute';
+import { isAdmin, normalizeRole } from './constants';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -61,7 +62,11 @@ function AppContent() {
     try {
       const storedUser = localStorage.getItem('user');
       if (storedUser && storedUser !== 'undefined') {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        setUser({
+          ...parsed,
+          role: normalizeRole(parsed.role),
+        });
       }
     } catch (error) {
       console.error('Error parsing stored user:', error);
@@ -85,7 +90,7 @@ function AppContent() {
       const notifs = [];
       const now = new Date();
 
-      if (user.role === 'admin') {
+      if (isAdmin(user.role)) {
         // Admin notifications: pending staff, leaves, and travel orders
         const pendingStaffRes = await staffAPI.getPending();
         if (pendingStaffRes.data.length > 0) {
@@ -430,7 +435,7 @@ function AppContent() {
             {sidebarOpen && <span>Dashboard</span>}
           </Link>
           
-          {user.role === 'admin' && (
+          {isAdmin(user.role) && (
             <>
               <Link 
                 to="/staffs" 

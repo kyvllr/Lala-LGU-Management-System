@@ -10,6 +10,17 @@ export const ROLES = {
   STAFF: 'staff'
 };
 
+export const normalizeRole = (rawRole) => {
+  if (!rawRole) return rawRole;
+  const role = String(rawRole).trim().toLowerCase();
+
+  // Backward compatibility for older DB/UI role values
+  if (role === 'admin' || role === 'hr' || role === 'human_resources') return ROLES.ADMIN_HR;
+  if (role === 'superadmin' || role === 'super-admin' || role === 'mayor') return ROLES.SUPER_ADMIN;
+
+  return role;
+};
+
 // Departments
 export const DEPARTMENTS = [
   'Engineering',
@@ -46,6 +57,8 @@ export const ROLES_WITH_DEPARTMENTS = [ROLES.HEAD_OFFICER, ROLES.STAFF];
 export const ROLE_HIERARCHY = {
   super_admin: 5,
   admin_hr: 5,
+  // legacy
+  admin: 5,
   head_requisitioning_office: 4,
   municipal_budget_officer: 4,
   municipal_assessor: 4,
@@ -56,10 +69,13 @@ export const ROLE_HIERARCHY = {
 
 // Check if a role has higher or equal permissions than another role
 export const hasHigherOrEqualPermissions = (userRole, requiredRole) => {
-  return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
+  const user = normalizeRole(userRole);
+  const required = normalizeRole(requiredRole);
+  return (ROLE_HIERARCHY[user] || 0) >= (ROLE_HIERARCHY[required] || 0);
 };
 
 // Check if a role is an admin
 export const isAdmin = (role) => {
-  return [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(role);
+  const normalized = normalizeRole(role);
+  return [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(normalized);
 };

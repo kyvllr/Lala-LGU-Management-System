@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash, TbPrinter } from 'react-icons/tb';
 import { staffAPI, serviceRecordAPI } from '../api';
+import { isAdmin, normalizeRole } from '../constants';
 
 function ServiceRecord() {
   const [user, setUser] = useState(null);
@@ -36,7 +37,7 @@ function ServiceRecord() {
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUser(storedUser);
+    setUser(storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser);
     fetchData();
   }, []);
 
@@ -47,7 +48,7 @@ function ServiceRecord() {
       setLoading(true);
       const storedUser = JSON.parse(localStorage.getItem('user'));
 
-      if (storedUser.role === 'admin') {
+      if (isAdmin(storedUser.role)) {
         // Admin sees staff list
         const staffRes = await staffAPI.getAll();
         setStaffs(staffRes.data.filter(s => s.isApproved));
@@ -563,7 +564,7 @@ function ServiceRecord() {
       )}
 
       {/* Admin view: Staff list */}
-      {user?.role === 'admin' && !viewingStaffId && (
+      {isAdmin(user?.role) && !viewingStaffId && (
         <div>
           <div className="mb-6 bg-white p-4 rounded shadow">
             <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -634,7 +635,7 @@ function ServiceRecord() {
       {(viewingStaffId || user?.role === 'staff') && (
         <div>
           <div className="flex items-center gap-4 mb-6">
-            {user?.role === 'admin' && viewingStaffId && (
+            {isAdmin(user?.role) && viewingStaffId && (
               <button
                 onClick={handleBackToList}
                 className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
@@ -681,7 +682,7 @@ function ServiceRecord() {
                   <th colSpan="2" className="px-4 py-3 text-center font-semibold border-r border-gray-400">OFFICIAL / DIVISION</th>
                   <th colSpan="2" className="px-4 py-3 text-center font-semibold border-r border-gray-400">LEAVE WITHOUT PAY</th>
                   <th className="px-4 py-3 text-center font-semibold border-r border-gray-400">Remarks</th>
-                  {user?.role === 'admin' && (
+                  {isAdmin(user?.role) && (
                     <th className="px-4 py-3 text-center font-semibold">Action</th>
                   )}
                 </tr>
@@ -696,7 +697,7 @@ function ServiceRecord() {
                   <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">From</th>
                   <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">To</th>
                   <th className="px-4 py-3 text-left font-semibold border-r border-gray-400"></th>
-                  {user?.role === 'admin' && (
+                  {isAdmin(user?.role) && (
                     <th className="px-4 py-3 text-center font-semibold"></th>
                   )}
                 </tr>
@@ -704,7 +705,7 @@ function ServiceRecord() {
               <tbody>
                 {serviceRecords.length === 0 && !showAddForm ? (
                   <tr>
-                    <td colSpan={user?.role === 'admin' ? 11 : 10} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={isAdmin(user?.role) ? 11 : 10} className="px-4 py-8 text-center text-gray-500">
                       No service records found
                     </td>
                   </tr>
@@ -846,7 +847,7 @@ function ServiceRecord() {
                           <td className="px-4 py-3">{record.leaveWithoutPayFrom || '-'}</td>
                           <td className="px-4 py-3">{record.leaveWithoutPayTo || '-'}</td>
                           <td className="px-4 py-3 max-w-xs">{record.remarks || '-'}</td>
-                          {user?.role === 'admin' && (
+                          {isAdmin(user?.role) && (
                             <td className="px-4 py-3 text-center">
                               <button
                                 onClick={() => handleEditRecord(record)}
@@ -868,7 +869,7 @@ function ServiceRecord() {
                       )
                     ))}
                     
-                    {showAddForm && user?.role === 'admin' && (
+                    {showAddForm && isAdmin(user?.role) && (
                       <tr className="border-t bg-blue-50">
                         <td className="px-4 py-3">
                           <input
@@ -992,7 +993,7 @@ function ServiceRecord() {
             </table>
           </div>
 
-          {user?.role === 'admin' && !showAddForm && (
+          {isAdmin(user?.role) && !showAddForm && (
             <button
               onClick={handleAddRecord}
               className="mt-6 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition"

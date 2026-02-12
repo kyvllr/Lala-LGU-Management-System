@@ -12,6 +12,26 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+const normalizeRole = (rawRole) => {
+  if (!rawRole) return rawRole;
+  const role = String(rawRole).trim().toLowerCase();
+
+  // Backward-compatibility: older versions used simple role values.
+  if (role === 'admin' || role === 'hr' || role === 'human_resources') {
+    return ROLES.ADMIN_HR;
+  }
+  if (role === 'superadmin' || role === 'super-admin' || role === 'mayor') {
+    return ROLES.SUPER_ADMIN;
+  }
+
+  return role;
+};
+
+const isSystemAdminRole = (rawRole) => {
+  const role = normalizeRole(rawRole);
+  return [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(role);
+};
+
 
 // Middleware
 app.use(cors());
@@ -28,7 +48,10 @@ const verifyToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = {
+      ...decoded,
+      role: normalizeRole(decoded.role),
+    };
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
@@ -38,7 +61,7 @@ const verifyToken = (req, res, next) => {
 // Check if user can manage staff in a specific department
 const canManageStaff = (userRole, userDepartment, targetStaffDepartment) => {
   // Super Admin and Admin/HR can manage all staff
-  if ([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(userRole)) {
+  if (isSystemAdminRole(userRole)) {
     return true;
   }
   
@@ -71,7 +94,8 @@ const requireRole = (allowedRoles) => {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
   
   return (req, res, next) => {
-    const userRole = req.user?.role;
+    const userRole = normalizeRole(req.user?.role);
+    const normalizedAllowed = roles.map(normalizeRole);
     
     // Super admin can access everything
     if (userRole === ROLES.SUPER_ADMIN) {
@@ -80,8 +104,8 @@ const requireRole = (allowedRoles) => {
     }
     
     // Check if user's role is in allowed roles
-    if (!roles.includes(userRole)) {
-      console.log(`Access denied - Required: ${roles.join(', ')}, User role: ${userRole}`);
+    if (!normalizedAllowed.includes(userRole)) {
+      console.log(`Access denied - Required: ${normalizedAllowed.join(', ')}, User role: ${userRole}`);
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
     
@@ -109,7 +133,7 @@ const staffSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    enum: Object.values(ROLES),
+    enum: [...Object.values(ROLES), 'admin'],
     default: ROLES.STAFF,
     required: true
   },
@@ -342,6 +366,13 @@ app.post('/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Normalize legacy role values in DB (e.g., "admin" -> "admin_hr")
+    const normalizedDbRole = normalizeRole(staff.role);
+    if (normalizedDbRole && staff.role !== normalizedDbRole) {
+      staff.role = normalizedDbRole;
+      await staff.save();
+    }
+
     const passwordMatch = await bcrypt.compare(password, staff.password);
     if (!passwordMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -356,7 +387,9 @@ app.post('/auth/login', async (req, res) => {
       ROLES.MUNICIPAL_ASSESSOR
     ];
     
-    if (!staff.isApproved && autoApprovedRoles.includes(staff.role)) {
+    const staffRoleNormalized = normalizeRole(staff.role);
+
+    if (!staff.isApproved && autoApprovedRoles.includes(staffRoleNormalized)) {
       console.log('Auto-approving account:', staff.id, 'Role:', staff.role);
       staff.isApproved = true;
       staff.approvedAt = Date.now();
@@ -369,8 +402,10 @@ app.post('/auth/login', async (req, res) => {
       return res.status(403).json({ message: 'Your account is pending admin approval. Please wait for approval to login.' });
     }
 
+    const roleForToken = normalizeRole(staff.role);
+
     const token = jwt.sign(
-      { id: staff._id, staffId: staff.id, name: staff.name, email: staff.email, role: staff.role, department: staff.department },
+      { id: staff._id, staffId: staff.id, name: staff.name, email: staff.email, role: roleForToken, department: staff.department },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -387,7 +422,7 @@ app.post('/auth/login', async (req, res) => {
         position: staff.position,
         department: staff.department,
         phone: staff.phone,
-        role: staff.role,
+        role: roleForToken,
       },
     });
   } catch (error) {

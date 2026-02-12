@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { TbArrowLeft, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveRecordAPI } from '../api';
+import { isAdmin, normalizeRole } from '../constants';
 
 function StaffLeaveRecordDetail() {
   const { staffId } = useParams();
@@ -57,7 +58,7 @@ function StaffLeaveRecordDetail() {
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUser(storedUser);
+    setUser(storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser);
     fetchData();
   }, [staffId]);
 
@@ -209,7 +210,7 @@ function StaffLeaveRecordDetail() {
     setAddError('');
     console.log('[handleAddRecord] Started - staffId:', staffId);
 
-    if (user.role !== 'admin') {
+    if (!user || !isAdmin(user.role)) {
       setAddError('Only admins can add leave records');
       console.error('[handleAddRecord] User is not admin');
       return;
@@ -294,7 +295,7 @@ function StaffLeaveRecordDetail() {
   };
 
   const handleDeleteLeave = async (recordId) => {
-    if (user.role !== 'admin') {
+    if (!user || !isAdmin(user.role)) {
       alert('Only admins can delete leave records');
       return;
     }
@@ -518,7 +519,7 @@ function StaffLeaveRecordDetail() {
                 <th className="px-6 py-3 text-center font-bold text-gray-700">SL Earned</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT W/PAY</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">CTO</th>
-                {user && user.role === 'admin' && (
+                {user && isAdmin(user.role) && (
                   <th className="px-6 py-3 text-center font-bold text-gray-700">Actions</th>
                 )}
               </tr>
@@ -526,7 +527,7 @@ function StaffLeaveRecordDetail() {
             <tbody>
               {leaveRecords.length === 0 && !showAddForm && (
                 <tr>
-                  <td colSpan={user && user.role === 'admin' ? 8 : 7} className="px-6 py-4 text-center text-gray-600">
+                  <td colSpan={user && isAdmin(user.role) ? 8 : 7} className="px-6 py-4 text-center text-gray-600">
                     No leave records found
                   </td>
                 </tr>
@@ -540,7 +541,7 @@ function StaffLeaveRecordDetail() {
                   <td className="px-6 py-4 text-center text-gray-800">{record.slEarned.toFixed(2)}</td>
                   <td className="px-6 py-4 text-center text-gray-800">{record.slAbsentUndertimeWPay.toFixed(2)}</td>
                   <td className="px-6 py-4 text-center text-gray-800">{record.cto ? parseFloat(record.cto).toFixed(2) : ''}</td>
-                  {user && user.role === 'admin' && (
+                  {user && isAdmin(user.role) && (
                     <td className="px-6 py-4 text-center flex gap-2 justify-center">
                       <button
                         onClick={() => handleEditLeave(record)}
@@ -560,7 +561,7 @@ function StaffLeaveRecordDetail() {
                   )}
                 </tr>
               ))}
-              {showAddForm && user && user.role === 'admin' && (
+              {showAddForm && user && isAdmin(user.role) && (
                 <tr className="border-b bg-blue-50">
                   <td className="px-6 py-2">
                     <input
@@ -661,7 +662,7 @@ function StaffLeaveRecordDetail() {
       
 
               {/* Add Record Button (Admin only) - Below Summary Table */}
-      {user && user.role === 'admin' && (
+      {user && isAdmin(user.role) && (
         <button
           onClick={() => setShowAddForm(!showAddForm)}
           className="mt-6 mb-6 px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition font-semibold"
