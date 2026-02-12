@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { staffAPI } from '../api';
+import { staffAPI, systemAPI } from '../api';
 
 function StaffList() {
   const [staffs, setStaffs] = useState([]);
@@ -30,6 +30,7 @@ function StaffList() {
     lastName: '',
     email: '',
     password: '',
+    role: '',
     position: '',
     department: '',
     phone: '',
@@ -37,10 +38,21 @@ function StaffList() {
     placeOfBirth: '',
     tinNumber: '',
   });
+  const [rolesAndDepartments, setRolesAndDepartments] = useState(null);
 
   useEffect(() => {
     fetchStaffs();
+    fetchRolesAndDepartments();
   }, []);
+
+  const fetchRolesAndDepartments = async () => {
+    try {
+      const response = await systemAPI.getRolesAndDepartments();
+      setRolesAndDepartments(response.data);
+    } catch (err) {
+      console.error('Failed to fetch roles and departments:', err);
+    }
+  };
 
   const fetchStaffs = async () => {
     try {
@@ -100,15 +112,33 @@ function StaffList() {
 
   const handleAddChange = (e) => {
     const { name, value } = e.target;
-    setAddFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Reset department if role is changed and new role doesn't require department
+    if (name === 'role') {
+      const requiresDept = rolesAndDepartments?.roles[value]?.requiresDepartment || false;
+      setAddFormData(prev => ({
+        ...prev,
+        [name]: value,
+        department: requiresDept ? prev.department : ''
+      }));
+    } else {
+      setAddFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleAddStaff = async () => {
-    if (!addFormData.id || !addFormData.firstName || !addFormData.lastName || !addFormData.email || !addFormData.password) {
-      setError('ID, First Name, Last Name, Email, and Password are required');
+    if (!addFormData.id || !addFormData.firstName || !addFormData.lastName || !addFormData.email || !addFormData.password || !addFormData.role) {
+      setError('ID, First Name, Last Name, Email, Password, and Role are required');
+      return;
+    }
+
+    // Check if department is required for this role
+    const selectedRoleData = rolesAndDepartments?.roles[addFormData.role];
+    if (selectedRoleData?.requiresDepartment && !addFormData.department) {
+      setError('Department is required for this role');
       return;
     }
 
@@ -119,6 +149,7 @@ function StaffList() {
         name: fullName,
         email: addFormData.email,
         password: addFormData.password,
+        role: addFormData.role,
         position: addFormData.position,
         department: addFormData.department,
         phone: addFormData.phone,
@@ -137,6 +168,7 @@ function StaffList() {
         lastName: '',
         email: '',
         password: '',
+        role: '',
         position: '',
         department: '',
         phone: '',
@@ -594,6 +626,33 @@ function StaffList() {
               </div>
 
               <div>
+                <label className="block font-bold mb-2">Role *</label>
+                {rolesAndDepartments ? (
+                  <select
+                    name="role"
+                    value={addFormData.role}
+                    onChange={handleAddChange}
+                    className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select a role</option>
+                    {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+                      <option key={roleKey} value={roleKey}>
+                        {roleData.displayName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="Loading roles..."
+                    className="w-full px-4 py-2 border rounded bg-gray-100 text-gray-500"
+                  />
+                )}
+              </div>
+
+              <div>
                 <label className="block font-bold mb-2">Position</label>
                 <input
                   type="text"
@@ -604,16 +663,25 @@ function StaffList() {
                 />
               </div>
 
-              <div>
-                <label className="block font-bold mb-2">Department</label>
-                <input
-                  type="text"
-                  name="department"
-                  value={addFormData.department}
-                  onChange={handleAddChange}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-                />
-              </div>
+              {rolesAndDepartments?.roles[addFormData.role]?.requiresDepartment && (
+                <div>
+                  <label className="block font-bold mb-2">Department *</label>
+                  <select
+                    name="department"
+                    value={addFormData.department}
+                    onChange={handleAddChange}
+                    className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select a department</option>
+                    {rolesAndDepartments.departments.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block font-bold mb-2">Phone</label>
