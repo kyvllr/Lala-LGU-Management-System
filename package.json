@@ -7,6 +7,7 @@
     "start": "cd backend && npm start",
     "dev": "cd backend && npm start",
     "build": "cd frontend && npm run build",
+    "seed": "cd backend && npm run seed",
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
   "keywords": [],
