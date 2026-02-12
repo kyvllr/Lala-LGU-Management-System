@@ -47,9 +47,14 @@ const requireRole = (role) => {
 };
 
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/lgufiling_db')
-.then(() => console.log('Connected to MongoDB'))
+// Connect to MongoDB Atlas
+if (!process.env.MONGODB_URI) {
+  console.error('Error: MONGODB_URI environment variable is not set');
+  process.exit(1);
+}
+
+mongoose.connect(process.env.MONGODB_URI)
+.then(() => console.log('Connected to MongoDB Atlas'))
 .catch((err) => console.error('MongoDB connection error:', err));
 
 
