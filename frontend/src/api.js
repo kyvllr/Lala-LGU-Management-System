@@ -51,6 +51,18 @@ export const staffAPI = {
   updateESignPermission: (id, permission) => api.patch(`/staffs/${id}/esign-permission`, { eSignPermission: permission }),
 };
 
+// Auth API
+export const authAPI = {
+  register: (data) => api.post('/auth/register', data),
+  login: (email, password) => api.post('/auth/login', { email, password }),
+  getCurrentUser: () => api.get('/auth/me'),
+};
+
+// System Configuration API
+export const systemAPI = {
+  getRolesAndDepartments: () => api.get('/system/roles-and-departments'),
+};
+
 // Leave API
 export const leaveAPI = {
   getAll: (status) => api.get('/leaves', { params: { status } }),
