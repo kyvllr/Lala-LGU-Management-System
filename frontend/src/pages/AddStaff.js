@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { staffAPI } from '../api';
+import React, { useState, useEffect } from 'react';
+import { staffAPI, systemAPI } from '../api';
+import { ROLE_DISPLAY_NAMES, ROLES_WITH_DEPARTMENTS } from '../constants';
 
 function AddStaff() {
   const [formData, setFormData] = useState({
@@ -9,6 +10,7 @@ function AddStaff() {
     lastName: '',
     email: '',
     password: '',
+    role: '',
     position: '',
     department: '',
     phone: '',
@@ -16,15 +18,44 @@ function AddStaff() {
     placeOfBirth: '',
     tinNumber: '',
   });
+  const [rolesAndDepartments, setRolesAndDepartments] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Fetch available roles and departments on component mount
+  useEffect(() => {
+    const fetchRolesAndDepartments = async () => {
+      try {
+        const response = await systemAPI.getRolesAndDepartments();
+        setRolesAndDepartments(response.data);
+      } catch (err) {
+        console.error('Failed to fetch roles and departments:', err);
+      }
+    };
+    fetchRolesAndDepartments();
+  }, []);
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    
+    // Reset department if role is changed and new role doesn't require department
+    if (name === 'role') {
+      const requiresDept = Object.keys(rolesAndDepartments?.roles || {}).some(
+        role => rolesAndDepartments.roles[role].requiresDepartment && role === value
+      );
+      
+      setFormData({
+        ...formData,
+        [name]: value,
+        department: requiresDept ? formData.department : ''
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -32,8 +63,15 @@ function AddStaff() {
     setError('');
     setSuccess('');
 
-    if (!formData.id || !formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-      setError('ID, First Name, Last Name, Email, and Password are required');
+    if (!formData.id || !formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.role) {
+      setError('ID, First Name, Last Name, Email, Password, and Role are required');
+      return;
+    }
+
+    // Check if department is required for this role
+    const selectedRoleData = rolesAndDepartments?.roles[formData.role];
+    if (selectedRoleData?.requiresDepartment && !formData.department) {
+      setError('Department is required for this role');
       return;
     }
 
@@ -52,6 +90,7 @@ function AddStaff() {
         lastName: '',
         email: '',
         password: '',
+        role: '',
         position: '',
         department: '',
         phone: '',
@@ -146,6 +185,33 @@ function AddStaff() {
         </div>
 
         <div>
+          <label className="block font-bold mb-2">Role *</label>
+          {rolesAndDepartments ? (
+            <select
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              required
+            >
+              <option value="">Select a role</option>
+              {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+                <option key={roleKey} value={roleKey}>
+                  {roleData.displayName}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              disabled
+              placeholder="Loading roles..."
+              className="w-full px-4 py-2 border rounded bg-gray-100 text-gray-500"
+            />
+          )}
+        </div>
+
+        <div>
           <label className="block font-bold mb-2">Position</label>
           <input
             type="text"
@@ -156,16 +222,25 @@ function AddStaff() {
           />
         </div>
 
-        <div>
-          <label className="block font-bold mb-2">Department</label>
-          <input
-            type="text"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-          />
-        </div>
+        {rolesAndDepartments?.roles[formData.role]?.requiresDepartment && (
+          <div>
+            <label className="block font-bold mb-2">Department *</label>
+            <select
+              name="department"
+              value={formData.department}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              required
+            >
+              <option value="">Select a department</option>
+              {rolesAndDepartments.departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block font-bold mb-2">Phone</label>
