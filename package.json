@@ -1,21 +1,15 @@
 {
-  "name": "filingsystem",
+  "name": "lgu-management-system",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Lala LGU Management System - Full Stack",
+  "main": "backend/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm start",
+    "build": "cd frontend && npm run build",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^2.2.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.0",
-    "mongoose": "^9.1.5"
-  }
+  "license": "ISC"
 }
