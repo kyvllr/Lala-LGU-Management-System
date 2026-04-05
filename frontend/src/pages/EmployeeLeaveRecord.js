@@ -3,6 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveAPI } from '../api';
 import { isAdmin, normalizeRole } from '../constants';
+import { exportToCsv } from '../exportCsv';
+// CSV import utility
+function importFromCsv(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+    const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, ''));
+    const data = lines.map(line => {
+      const values = line.match(/("[^"]*"|[^,]+)/g)?.map(v => v.replace(/^"|"$/g, '')) || [];
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+    callback(data);
+  };
+  reader.readAsText(file);
+}
 
 function EmployeeLeaveRecord() {
   const [user, setUser] = useState(null);
@@ -15,16 +33,23 @@ function EmployeeLeaveRecord() {
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
-    setUser(storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser);
+    const normalizedUser = storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser;
+    setUser(normalizedUser);
     
-    // If staff user, redirect directly to their leave record
-    if (storedUser.role === 'staff') {
-      navigate(`/employee-leave-record/${storedUser.staffId}`, { state: { staffName: storedUser.name } });
+    // Non-admin users can only view their own leave record
+    if (normalizedUser && !isAdmin(normalizedUser.role)) {
+      const ownStaffId = normalizedUser.staffId || normalizedUser.id;
+      if (!ownStaffId) {
+        setError('Unable to determine your staff ID.');
+        setLoading(false);
+        return;
+      }
+      navigate(`/employee-leave-record/${ownStaffId}`, { state: { staffName: normalizedUser.name } });
       return;
     }
     
     fetchData();
-  }, [navigate]);
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -53,6 +78,19 @@ function EmployeeLeaveRecord() {
     navigate(`/employee-leave-record/${staffId}`, { state: { staffName } });
   };
 
+  const handleExportCsv = () => {
+    if (!staffs.length) return;
+    exportToCsv('employee_leave_records.csv', staffs);
+  };
+
+  const handleImportCsv = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    importFromCsv(file, (data) => {
+      setStaffs(data);
+    });
+  };
+
   const filteredStaffs = staffs.filter(staff =>
     staff.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (staff.employeeId && staff.employeeId.toString().includes(searchQuery)) ||
@@ -68,6 +106,8 @@ function EmployeeLeaveRecord() {
       <h1 className="text-3xl font-bold mb-6">Employee's Leave Record</h1>
 
       {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+
+      
 
       {/* Search Bar */}
       <div className="mb-6 flex gap-4 items-center">

@@ -104,7 +104,7 @@ filingSystem/
 - ✅ Edit pending leaves (staff own)
 - ✅ Delete pending leaves (staff own)
 - ✅ Approve leaves (admin)
-- ✅ Reject leaves (admin)
+- ✅ Disapprove leaves (admin)
 
 ### Travel Order Management
 - ✅ File travel order requests (staff own only)
@@ -113,7 +113,7 @@ filingSystem/
 - ✅ Edit pending orders (staff own)
 - ✅ Delete pending orders (staff own)
 - ✅ Approve orders (admin)
-- ✅ Reject orders (admin)
+- ✅ Disapprove orders (admin)
 - ✅ Mark as completed (staff own approved)
 
 ## Technology Stack
@@ -199,7 +199,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:5001/auth/me
 - `GET /leave/:id` - Get specific leave
 - `PUT /leaves/:id` - Update pending (staff own)
 - `PATCH /leaves/:id/approve` - Approve (admin)
-- `PATCH /leaves/:id/reject` - Reject (admin)
+- `PATCH /leaves/:id/disapprove` - Disapprove (admin)
 - `DELETE /leaves/:id` - Delete (staff own pending, admin any)
 
 ### Travel Orders (Protected)
@@ -209,7 +209,7 @@ curl -H "Authorization: Bearer <token>" http://localhost:5001/auth/me
 - `GET /travel-order/:id` - Get specific order
 - `PUT /travel-orders/:id` - Update pending (staff own)
 - `PATCH /travel-orders/:id/approve` - Approve (admin)
-- `PATCH /travel-orders/:id/reject` - Reject (admin)
+- `PATCH /travel-orders/:id/disapprove` - Disapprove (admin)
 - `PATCH /travel-orders/:id/complete` - Mark completed (staff own approved)
 - `DELETE /travel-orders/:id` - Delete (staff own pending, admin any)
 

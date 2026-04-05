@@ -142,7 +142,7 @@ Visit `http://localhost:3000`
 - `GET /leaves` - Get all leaves (with optional status filter)
 - `GET /leaves/staff/:staffId` - Get staff's leaves
 - `PATCH /leaves/:leaveId/approve` - Approve leave
-- `PATCH /leaves/:leaveId/reject` - Reject leave
+- `PATCH /leaves/:leaveId/disapprove` - Disapprove leave
 - `DELETE /leaves/:leaveId` - Delete leave
 
 ### Travel Order Management
@@ -150,7 +150,7 @@ Visit `http://localhost:3000`
 - `GET /travel-orders` - Get all travel orders
 - `GET /travel-orders/staff/:staffId` - Get staff's travel orders
 - `PATCH /travel-orders/:travelOrderId/approve` - Approve travel order
-- `PATCH /travel-orders/:travelOrderId/reject` - Reject travel order
+- `PATCH /travel-orders/:travelOrderId/disapprove` - Disapprove travel order
 - `PATCH /travel-orders/:travelOrderId/complete` - Mark as completed
 - `DELETE /travel-orders/:travelOrderId` - Delete travel order
 
@@ -169,9 +169,9 @@ See [API_EXAMPLES.md](API_EXAMPLES.md) for detailed examples.
 ### Admin Features
 ✅ Manage staff records
 ✅ View all leave requests
-✅ Approve/reject leave with remarks
+✅ Approve/disapprove leave with remarks
 ✅ View all travel orders
-✅ Approve/reject travel orders
+✅ Approve/disapprove travel orders
 ✅ Dashboard with statistics
 ✅ Filter requests by status
 

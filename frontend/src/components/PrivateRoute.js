@@ -12,15 +12,20 @@ export default function PrivateRoute({ children, requiredRole }) {
   }
 
   if (requiredRole) {
-    const required = normalizeRole(requiredRole);
+    const requiredRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
     const actual = normalizeRole(user.role);
 
-    // App routes use legacy labels: requiredRole="admin" or "staff"
-    if (requiredRole === 'admin') {
-      if (!isAdmin(actual)) return <Navigate to="/unauthorized" replace />;
-    } else if (requiredRole === 'staff') {
-      if (actual !== 'staff') return <Navigate to="/unauthorized" replace />;
-    } else if (actual !== required) {
+    const hasAccess = requiredRoles.some((role) => {
+      const normalizedRequired = normalizeRole(role);
+
+      // App routes use legacy labels: requiredRole="admin" or "staff"
+      if (role === 'admin') return isAdmin(actual);
+      if (role === 'staff') return actual === 'staff';
+
+      return actual === normalizedRequired;
+    });
+
+    if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
   }

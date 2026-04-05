@@ -6,7 +6,7 @@ export default function ApprovePendingStaff() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [approving, setApproving] = useState(null);
-  const [rejecting, setRejecting] = useState(null);
+  const [disapproving, setDisapproving] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
 
   useEffect(() => {
@@ -54,20 +54,20 @@ export default function ApprovePendingStaff() {
     }
   };
 
-  const handleReject = async (staffId) => {
-    if (!window.confirm('Are you sure you want to reject this registration? This action cannot be undone.')) {
+  const handleDisapprove = async (staffId) => {
+    if (!window.confirm('Are you sure you want to disapprove this registration? This action cannot be undone.')) {
       return;
     }
     try {
-      setRejecting(staffId);
-      await staffAPI.reject(staffId);
+      setDisapproving(staffId);
+      await staffAPI.disapprove(staffId);
       setPendingStaffs(pendingStaffs.filter(s => s.id !== staffId));
       setError('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reject staff');
-      console.error('Error rejecting staff:', err);
+      setError(err.response?.data?.message || 'Failed to disapprove staff');
+      console.error('Error disapproving staff:', err);
     } finally {
-      setRejecting(null);
+      setDisapproving(null);
     }
   };
 
@@ -85,7 +85,7 @@ export default function ApprovePendingStaff() {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Account Requests</h1>
-        <p className="text-1xl text-gray-400">Review and approve or reject pending staff registration requests</p>
+        <p className="text-1xl text-gray-400">Review and approve or disapprove pending staff registration requests</p>
         <div className="mt-4 text-sm text-gray-500">
           <button
             onClick={fetchPendingStaffs}
@@ -153,11 +153,11 @@ export default function ApprovePendingStaff() {
                       {approving === staff.id ? 'Approving...' : 'Approve'}
                     </button>
                     <button
-                      onClick={() => handleReject(staff.id)}
-                      disabled={rejecting === staff.id}
+                      onClick={() => handleDisapprove(staff.id)}
+                      disabled={disapproving === staff.id}
                       className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition disabled:opacity-50"
                     >
-                      {rejecting === staff.id ? 'Rejecting...' : 'Reject'}
+                      {disapproving === staff.id ? 'Disapproving...' : 'Disapprove'}
                     </button>
                   </td>
                 </tr>

@@ -25,12 +25,12 @@ The Leave and Travel Order Management System now includes complete role-based au
 
 ✅ **Leave Management (Protected)**
 - Staff can only file/view/modify their own leaves
-- Admin can view and approve/reject all leaves
+- Admin can view and approve/disapprove all leaves
 - Role-based access control on all operations
 
 ✅ **Travel Order Management (Protected)**
 - Staff can only file/view/modify their own travel orders
-- Admin can view and approve/reject all travel orders
+- Admin can view and approve/disapprove all travel orders
 - Role-based access control on all operations
 
 ### Frontend (React)
@@ -124,7 +124,7 @@ GET    /leaves/staff/:id - Get staff's leaves (self or admin)
 GET    /leave/:id        - Get specific leave (with access control)
 PUT    /leaves/:id       - Update pending leave (staff own only)
 PATCH  /leaves/:id/approve    - Approve leave (admin only)
-PATCH  /leaves/:id/reject     - Reject leave (admin only)
+PATCH  /leaves/:id/disapprove     - Disapprove leave (admin only)
 DELETE /leaves/:id       - Delete leave (staff own pending, admin any)
 ```
 
@@ -136,7 +136,7 @@ GET    /travel-orders/staff/:id    - Get staff's orders (self or admin)
 GET    /travel-order/:id           - Get specific order (with access control)
 PUT    /travel-orders/:id          - Update pending order (staff own only)
 PATCH  /travel-orders/:id/approve  - Approve order (admin only)
-PATCH  /travel-orders/:id/reject   - Reject order (admin only)
+PATCH  /travel-orders/:id/disapprove   - Disapprove order (admin only)
 PATCH  /travel-orders/:id/complete - Mark as completed (staff own approved, admin any)
 DELETE /travel-orders/:id          - Delete order (staff own pending, admin any)
 ```
@@ -147,10 +147,10 @@ DELETE /travel-orders/:id          - Delete order (staff own pending, admin any)
 - Can register and login
 - Can file leave requests for themselves only
 - Can view/edit/delete their own pending leave requests
-- Cannot approve or reject leaves
+- Cannot approve or disapprove leaves
 - Can file travel order requests for themselves only
 - Can view/edit/delete their own pending travel orders
-- Cannot approve or reject travel orders
+- Cannot approve or disapprove travel orders
 - Cannot access staff management
 
 ### Admin Role
@@ -158,30 +158,29 @@ DELETE /travel-orders/:id          - Delete order (staff own pending, admin any)
 - Can view all staff members
 - Can add/edit/delete staff members
 - Can view all leave requests
-- Can approve/reject any leave requests
+- Can approve/disapprove any leave requests
 - Can view all travel orders
-- Can approve/reject any travel orders
+- Can approve/disapprove any travel orders
 - Can mark any travel order as completed
 - Full access to all routes
 
 ## Testing the System
 
-### Demo Credentials (Must be created first)
+### Demo Credentials (Seeded)
 
-**Register new staff:**
-1. Go to http://localhost:3000/register
-2. Fill in the registration form
-3. Use any email/password combination
+Run the seed script first:
 
-**Admin Account Setup:**
-To create an admin account, use MongoDB or the API:
-```javascript
-// Register as staff first, then manually update role in database
-db.staffs.updateOne(
-  { email: "admin@lgu.gov" },
-  { $set: { role: "admin" } }
-)
+```bash
+cd /Users/kayevillar/Documents/filingSystem
+npm run seed
 ```
+
+**Admin accounts:**
+- Super Admin/Mayor: `mayor@lgu.gov` / `Admin_0`
+- Admin/HR: `admin@lgu.gov` / `Admin_0`
+
+**Sample staff account:**
+- `staff.engineeringoffice@lgu.gov` / `Staff_0`
 
 ### API Testing with cURL
 

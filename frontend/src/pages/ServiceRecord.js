@@ -3,12 +3,65 @@ import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash, TbPrinter } from 'react-icons/tb';
 import { staffAPI, serviceRecordAPI } from '../api';
 import { isAdmin, normalizeRole } from '../constants';
+import { exportToCsv } from '../exportCsv';
+// CSV import utility
+function importFromCsv(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const [headerLine, ...lines] = text.split(/\r?\n/).filter(Boolean);
+    const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, ''));
+    const data = lines.map(line => {
+      const values = line.match(/("[^"]*"|[^,]+)/g)?.map(v => v.replace(/^"|"$/g, '')) || [];
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+    // Map imported CSV columns to internal fields
+    function parseDate(val) {
+      if (!val) return '';
+      // Try to parse M/D/YY or M/D/YYYY
+      const parts = val.split('/');
+      if (parts.length === 3) {
+        let [m, d, y] = parts;
+        m = m.padStart(2, '0');
+        d = d.padStart(2, '0');
+        y = y.length === 2 ? '20' + y : y;
+        const iso = `${y}-${m}-${d}`;
+        const dt = new Date(iso);
+        if (!isNaN(dt.getTime())) return iso;
+      }
+      // Fallback: try Date constructor
+      const dt = new Date(val);
+      if (!isNaN(dt.getTime())) return dt.toISOString().split('T')[0];
+      return '';
+    }
+    const mapped = data
+      .map(row => ({
+        serviceFrom: parseDate(row['From']),
+        serviceTo: parseDate(row['To']),
+        designation: row['Designation'] || '',
+        status: row['Status'] || '',
+        salary: row['Salary'] ? row['Salary'].replace(/,/g, '') : '',
+        station: row['Station / Place of Assignment | Branch']?.split(' | ')[0] || '',
+        branch: row['Station / Place of Assignment | Branch']?.split(' | ')[1] || '',
+        leaveWithoutPayFrom: row['Leave Without Pay From'] || '',
+        leaveWithoutPayTo: row['Leave Without Pay To'] || '',
+        remarks: row['Remarks'] || '',
+      }))
+      .filter(row => Object.values(row).some(val => val && val !== '-'));
+    callback(mapped);
+  };
+  reader.readAsText(file);
+}
 
 function ServiceRecord() {
   const [user, setUser] = useState(null);
   const [staffs, setStaffs] = useState([]);
   const [serviceRecords, setServiceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [recordsToShow, setRecordsToShow] = useState(10);
@@ -56,8 +109,9 @@ function ServiceRecord() {
         const recordsRes = await serviceRecordAPI.getAll();
         setServiceRecords(recordsRes.data);
       } else {
-        // Staff sees only their own records
-        const recordsRes = await serviceRecordAPI.getByStaffId(storedUser.staffId);
+        // Non-admin users see only their own records
+        const ownStaffId = storedUser.staffId || storedUser.id;
+        const recordsRes = await serviceRecordAPI.getByStaffId(ownStaffId);
         setServiceRecords(recordsRes.data);
       }
       setError('');
@@ -203,8 +257,6 @@ function ServiceRecord() {
       }
     }
   };
-
-
 
   const handlePrint = () => {
     // Admin gets modal option
@@ -500,8 +552,10 @@ function ServiceRecord() {
     setShowSignatureModal(false);
     
     const printWindow = window.open('', '_blank');
-    const staffId = user?.role === 'staff' ? user?.staffId : viewingStaffId;
-    const staffName = user?.role === 'staff' ? user?.name : viewingStaffName;
+    const ownStaffId = user?.staffId || user?.id;
+    const isSelfView = !isAdmin(user?.role);
+    const staffId = isSelfView ? ownStaffId : viewingStaffId;
+    const staffName = isSelfView ? user?.name : viewingStaffName;
     
     // Fetch full staff details to get birthdate and TIN
     let staffDetails = null;
@@ -551,7 +605,76 @@ function ServiceRecord() {
     }
   };
 
+  const handleExportCsv = () => {
+    if (!serviceRecords.length) return;
+    // Match the table columns and formatting
+    const fields = [
+      'From',
+      'To',
+      'Designation',
+      'Status',
+      'Salary',
+      'Station / Place of Assignment | Branch',
+      'Leave Without Pay From',
+      'Leave Without Pay To',
+      'Remarks',
+    ];
+    const filtered = serviceRecords.map(r => ({
+      'From': r.serviceFrom ? new Date(r.serviceFrom).toLocaleDateString('en-US') : '',
+      'To': r.serviceTo ? new Date(r.serviceTo).toLocaleDateString('en-US') : '',
+      'Designation': r.designation || '',
+      'Status': r.status || '',
+      'Salary': r.salary ? parseFloat(r.salary).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '',
+      'Station / Place of Assignment | Branch': [r.station, r.branch].filter(Boolean).join(' | '),
+      'Leave Without Pay From': r.leaveWithoutPayFrom || '',
+      'Leave Without Pay To': r.leaveWithoutPayTo || '',
+      'Remarks': r.remarks || '',
+    }));
+    exportToCsv(
+      (viewingStaffName || user?.name || 'service-records') + '_service_records.csv',
+      filtered
+    );
+  };
+
+  const handleImportCsv = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImporting(true);
+    setImportSuccess(false);
+    importFromCsv(file, async (importedData) => {
+      // Determine staffId and staffName for imported records
+      let staffId = viewingStaffId || user?.staffId || '';
+      let staffName = viewingStaffName || user?.name || '';
+      // If admin is viewing all, require staff selection
+      if (isAdmin(user?.role) && !viewingStaffId) {
+        setError('Please select a staff to import records for.');
+        setImporting(false);
+        return;
+      }
+      // Add staffId and staffName to each imported record
+      const recordsWithStaff = importedData.map(r => ({ ...r, staffId, staffName }));
+      let newRecords = [];
+      let failed = 0;
+      for (const rec of recordsWithStaff) {
+        try {
+          const res = await serviceRecordAPI.create(rec);
+          newRecords.push(res.data.record);
+        } catch (err) {
+          failed++;
+        }
+      }
+      setServiceRecords(prev => [...prev, ...newRecords]);
+      setImporting(false);
+      setImportSuccess(true);
+      if (failed > 0) setError(`${failed} record(s) failed to import.`);
+      setTimeout(() => setImportSuccess(false), 2000);
+    });
+  };
+
   if (loading) return <div className="text-center p-8">Loading...</div>;
+
+  if (importing) return <div className="text-center p-8 text-blue-600 font-bold">Importing records...</div>;
+  if (importSuccess) return <div className="text-center p-8 text-green-600 font-bold">Import successful!</div>;
 
   return (
     <div className="mt-6">
@@ -631,8 +754,8 @@ function ServiceRecord() {
         </div>
       )}
 
-      {/* Detail view: Service records for selected staff (Admin) or own records (Staff) */}
-      {(viewingStaffId || user?.role === 'staff') && (
+      {/* Detail view: Service records for selected staff (Admin) or own records (non-admin) */}
+      {(viewingStaffId || (user && !isAdmin(user?.role))) && (
         <div>
           <div className="flex items-center gap-4 mb-6">
             {isAdmin(user?.role) && viewingStaffId && (
@@ -644,16 +767,31 @@ function ServiceRecord() {
               </button>
             )}
             <h2 className="text-2xl font-bold">
-              {user?.role === 'staff' ? 'My Service Records' : `${viewingStaffName}'s Service Records`}
+              {!isAdmin(user?.role) ? 'My Service Records' : `${viewingStaffName}'s Service Records`}
             </h2>
-            <button
-              onClick={handlePrint}
-              className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
-              title="Print service record"
-            >
-              <TbPrinter size={20} />
-              Print
-            </button>
+            {isAdmin(user?.role) && (
+              <>
+                <button
+                  onClick={handlePrint}
+                  className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                  title="Print service record"
+                >
+                  <TbPrinter size={20} />
+                  Print
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  className="ml-2 flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
+                  title="Export CSV"
+                >
+                  Export CSV
+                </button>
+                <label className="ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition cursor-pointer">
+                  Import CSV
+                  <input type="file" accept=".csv" onChange={handleImportCsv} style={{ display: 'none' }} />
+                </label>
+              </>
+            )}
           </div>
 
           <div className="mb-6 bg-white p-4 rounded shadow">
@@ -792,7 +930,7 @@ function ServiceRecord() {
                               value={formData.leaveWithoutPayFrom}
                               onChange={handleFormChange}
                               placeholder="mm/dd/yyyy"
-                              className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500 text-xs"
+                              className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500"
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -802,7 +940,7 @@ function ServiceRecord() {
                               value={formData.leaveWithoutPayTo}
                               onChange={handleFormChange}
                               placeholder="mm/dd/yyyy"
-                              className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500 text-xs"
+                              className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500"
                             />
                           </td>
                           <td className="px-4 py-3">

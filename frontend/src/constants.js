@@ -23,28 +23,32 @@ export const normalizeRole = (rawRole) => {
 
 // Departments
 export const DEPARTMENTS = [
+  'Accountant',
+  'Administrator',
+  'Agriculture',
+  'Assessor',
+  'Budget',
+  'DRRM',
+  'Economic Enterprise and Development',
   'Engineering',
+  'General Services',
+  'Health Office',
   'LCR',
-  'Planning',
-  'Finance',
-  'HR',
-  'Administration',
-  'Health Services',
-  'Public Safety',
-  'Social Services',
-  'Requisitioning Office',
-  'Budget Office',
-  'Assessor Office'
+  'Planning and Development',
+  'Secretary to the Sangguniang Bayan',
+  'Social Welfare and Development',
+  'Tourism',
+  'Treasurer'
 ];
 
 // Role display names
 export const ROLE_DISPLAY_NAMES = {
   super_admin: 'Super Admin/Mayor',
   admin_hr: 'Admin/HR (Human Resources)',
-  head_requisitioning_office: 'Head of Requisitioning Office',
+  head_requisitioning_office: 'Head of Requisitioning officer',
   municipal_budget_officer: 'Municipal Budget Officer',
   municipal_assessor: 'Municipal Assessor',
-  job_order_officer: 'Job Order Officer',
+  job_order_officer: 'Job order officer',
   head_officer: 'Head Officer',
   staff: 'Staff'
 };

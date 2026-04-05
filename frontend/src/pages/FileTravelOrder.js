@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { travelOrderAPI, staffAPI } from '../api';
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().split('T')[0];
+};
+
 function FileTravelOrder({ staffId }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [travelType, setTravelType] = useState('');
+  const [editingTravelOrderId, setEditingTravelOrderId] = useState('');
   const [numDesignations, setNumDesignations] = useState(1);
   const [customNumDesignations, setCustomNumDesignations] = useState('');
   const [isCustomDesignations, setIsCustomDesignations] = useState(false);
@@ -26,7 +36,6 @@ function FileTravelOrder({ staffId }) {
     recommendingApproval: '',
     // Travel Abroad Fields
     datePrepared: '',
-    controlNo: '',
     region: '',
     province: '',
     municipality: '',
@@ -50,6 +59,19 @@ function FileTravelOrder({ staffId }) {
     }
   }, [staffId]);
 
+  useEffect(() => {
+    if (!staffId) {
+      return;
+    }
+
+    const editId = searchParams.get('edit');
+    if (editId) {
+      fetchTravelOrderForEdit(editId);
+    } else {
+      setEditingTravelOrderId('');
+    }
+  }, [staffId, searchParams]);
+
   const fetchStaffName = async () => {
     try {
       const response = await staffAPI.getById(staffId);
@@ -61,6 +83,73 @@ function FileTravelOrder({ staffId }) {
       }));
     } catch (err) {
       setError('Staff ID not found');
+    }
+  };
+
+  const fetchTravelOrderForEdit = async (travelOrderId) => {
+    try {
+      const response = await travelOrderAPI.getById(travelOrderId);
+      const order = response.data;
+
+      if (order.staffId !== staffId) {
+        setError('You can only edit your own travel order');
+        return;
+      }
+
+      const resolvedTravelType = order.travelType || (order.controlNo ? 'abroad' : 'office');
+      const resolvedDesignations = Array.isArray(order.designations) && order.designations.length > 0
+        ? order.designations
+        : (order.position ? [order.position] : ['']);
+
+      setTravelType(resolvedTravelType);
+      setEditingTravelOrderId(order.travelOrderId);
+      if (order.staffName) {
+        setStaffName(order.staffName);
+      }
+
+      const designationCount = resolvedDesignations.length;
+      if (designationCount > 5) {
+        setIsCustomDesignations(true);
+        setCustomNumDesignations(String(designationCount));
+      } else {
+        setIsCustomDesignations(false);
+        setCustomNumDesignations('');
+      }
+      setNumDesignations(designationCount);
+
+      setFormData((prev) => ({
+        ...prev,
+        travelOrderId: order.travelOrderId || '',
+        staffId,
+        staffName: order.staffName || prev.staffName,
+        dateOfFiling: toDateInputValue(order.dateOfFiling || order.dateFrom || order.createdAt),
+        designations: resolvedDesignations,
+        permanentStation: order.permanentStation || order.office || '',
+        purposeOfTravel: order.purposeOfTravel || order.purpose || '',
+        activitySponsoredBy: order.activitySponsoredBy || '',
+        periodCoveredFrom: toDateInputValue(order.periodCoveredFrom || order.dateFrom),
+        periodCoveredTo: toDateInputValue(order.periodCoveredTo || order.dateTo || order.dateFrom),
+        officialBusiness: Boolean(order.officialBusiness),
+        officialTime: Boolean(order.officialTime),
+        venueDestination: order.venueDestination || order.destination || '',
+        expensesCovered: order.expensesCovered || '',
+        fundSourcePapCode: order.fundSourcePapCode || '',
+        recommendingApproval: order.recommendingApproval || '',
+        datePrepared: toDateInputValue(order.datePrepared || order.dateOfFiling || order.dateFrom),
+        region: order.region || '',
+        province: order.province || '',
+        municipality: order.municipality || '',
+        abroadDateOfFiling: toDateInputValue(order.abroadDateOfFiling || order.dateFrom || order.createdAt),
+        abroadName: order.abroadName || order.staffName || '',
+        office: order.office || order.permanentStation || '',
+        position: order.position || '',
+        period: order.period || '',
+        travelDestination: order.travelDestination || order.destination || '',
+        fundSource: order.fundSource || order.fundSourcePapCode || '',
+        attachment: order.attachment || '',
+      }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load travel order for editing');
     }
   };
 
@@ -150,12 +239,12 @@ function FileTravelOrder({ staffId }) {
 
     // Validate based on travel type
     if (travelType === 'office') {
-      if (!formData.dateOfFiling || formData.designations.some(d => !d) || !formData.permanentStation || !formData.purposeOfTravel || !formData.activitySponsoredBy || !formData.periodCoveredFrom || !formData.periodCoveredTo || !formData.venueDestination || !formData.expensesCovered || !formData.fundSourcePapCode) {
+      if (!formData.dateOfFiling || formData.designations.some(d => !d) || !formData.permanentStation || !formData.purposeOfTravel || !formData.activitySponsoredBy || !formData.periodCoveredFrom || !formData.periodCoveredTo || !formData.venueDestination || !formData.expensesCovered) {
         setError('All required fields must be filled');
         return;
       }
     } else if (travelType === 'abroad') {
-      if (!formData.datePrepared || !formData.controlNo || !formData.region || !formData.province || !formData.municipality || !formData.abroadDateOfFiling || !formData.abroadName || !formData.office || !formData.position || !formData.period || !formData.travelDestination || !formData.fundSource) {
+      if (!formData.datePrepared || !formData.region || !formData.province || !formData.municipality || !formData.abroadDateOfFiling || !formData.abroadName || !formData.office || !formData.position || !formData.period || !formData.travelDestination || !formData.fundSource) {
         setError('All required fields must be filled');
         return;
       }
@@ -165,13 +254,21 @@ function FileTravelOrder({ staffId }) {
       setLoading(true);
       const submitData = {
         ...formData,
-        travelOrderId: generateTravelOrderId(),
+        travelOrderId: editingTravelOrderId || generateTravelOrderId(),
         staffId,
-        staffName,
+        staffName: formData.staffName || staffName,
         travelType,
       };
-      await travelOrderAPI.create(submitData);
-      setSuccess('Travel order request filed successfully!');
+      if (editingTravelOrderId) {
+        await travelOrderAPI.update(editingTravelOrderId, submitData);
+        setSuccess('Travel order updated and resubmitted successfully!');
+      } else {
+        await travelOrderAPI.create(submitData);
+        setSuccess('Travel order request filed successfully!');
+      }
+
+      setEditingTravelOrderId('');
+      setSearchParams({});
       setTravelType('');
       setNumDesignations(1);
       setCustomNumDesignations('');
@@ -194,7 +291,6 @@ function FileTravelOrder({ staffId }) {
         fundSourcePapCode: '',
         recommendingApproval: '',
         datePrepared: '',
-        controlNo: '',
         region: '',
         province: '',
         municipality: '',
@@ -410,7 +506,7 @@ function FileTravelOrder({ staffId }) {
             </div>
 
             <div>
-              <label className="block font-bold mb-2">Fund Source (PAP Code) *</label>
+              <label className="block font-bold mb-2">Fund Source (PAP Code)</label>
               <input
                 type="text"
                 name="fundSourcePapCode"
@@ -418,7 +514,6 @@ function FileTravelOrder({ staffId }) {
                 onChange={handleChange}
                 placeholder="e.g., PAP-2026-001"
                 className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-                required
               />
             </div>
           </div>
@@ -434,19 +529,6 @@ function FileTravelOrder({ staffId }) {
                 name="datePrepared"
                 value={formData.datePrepared}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold mb-2">Control No. *</label>
-              <input
-                type="text"
-                name="controlNo"
-                value={formData.controlNo}
-                onChange={handleChange}
-                placeholder="e.g., CO-2026-001"
                 className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
                 required
               />
@@ -600,7 +682,7 @@ function FileTravelOrder({ staffId }) {
           disabled={loading || !staffName || !travelType}
           className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
         >
-          {loading ? 'Filing...' : 'File Travel Order'}
+          {loading ? (editingTravelOrderId ? 'Updating...' : 'Filing...') : (editingTravelOrderId ? 'Update & Resubmit Travel Order' : 'File Travel Order')}
         </button>
       </form>
     </div>

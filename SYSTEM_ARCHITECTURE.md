@@ -84,7 +84,7 @@ A comprehensive Leave and Travel Order Management System for Local Government Un
 │  │ │  ├─ staffName                                     │  │
 │  │ │  ├─ leaveType                                     │  │
 │  │ │  ├─ dateFrom, dateTo                              │  │
-│  │ │  ├─ status (Pending|Approved|Rejected)            │  │
+│  │ │  ├─ status (Pending|Approved|Disapproved)            │  │
 │  │ │  ├─ purpose                                       │  │
 │  │ │  └─ timestamps                                    │  │
 │  │ └─ travelorders collection                          │  │
@@ -93,7 +93,7 @@ A comprehensive Leave and Travel Order Management System for Local Government Un
 │  │    ├─ staffName                                     │  │
 │  │    ├─ destination                                   │  │
 │  │    ├─ dateFrom, dateTo                              │  │
-│  │    ├─ status (Pending|Approved|Rejected|Completed)  │  │
+│  │    ├─ status (Pending|Approved|Disapproved|Completed)  │  │
 │  │    ├─ transportMode                                 │  │
 │  │    ├─ estimatedBudget                               │  │
 │  │    └─ timestamps                                    │  │
@@ -182,7 +182,7 @@ Leave Management:
 ├─ ✅ Edit own pending leaves
 ├─ ✅ Delete own pending leaves
 ├─ ❌ View other staff leaves
-└─ ❌ Approve/reject leaves
+└─ ❌ Approve/disapprove leaves
 
 Travel Orders:
 ├─ ✅ File travel order requests
@@ -191,7 +191,7 @@ Travel Orders:
 ├─ ✅ Mark own approved orders as completed
 ├─ ✅ Delete own pending orders
 ├─ ❌ View other staff orders
-└─ ❌ Approve/reject orders
+└─ ❌ Approve/disapprove orders
 ```
 
 ### Admin Role Permissions
@@ -212,7 +212,7 @@ Leave Management:
 ├─ ✅ File own leave requests
 ├─ ✅ View all leaves
 ├─ ✅ Approve pending leaves
-├─ ✅ Reject pending leaves
+├─ ✅ Disapprove pending leaves
 ├─ ✅ Delete any leave
 └─ ✅ Edit/view all leaves
 
@@ -220,7 +220,7 @@ Travel Orders:
 ├─ ✅ File own travel orders
 ├─ ✅ View all travel orders
 ├─ ✅ Approve pending orders
-├─ ✅ Reject pending orders
+├─ ✅ Disapprove pending orders
 ├─ ✅ Mark any order as completed
 └─ ✅ Edit/delete any order
 ```
@@ -361,7 +361,7 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
-    return Promise.reject(error);
+    return Promise.disapprove(error);
   }
 );
 ```

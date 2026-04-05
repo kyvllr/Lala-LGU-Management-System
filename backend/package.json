@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node index.js",
     "seed": "node seed.js",
+    "migrate:pds-govid": "node migrate_pds_govid_idtype.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

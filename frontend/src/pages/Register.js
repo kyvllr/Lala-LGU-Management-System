@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api, { systemAPI } from '../api';
 
+const RESTRICTED_REGISTRATION_ROLE_DISPLAY_NAMES = [
+  'Super Admin/Mayor',
+  'Admin/HR (Human Resources)',
+];
+
 export default function Register() {
   const [formData, setFormData] = useState({
     staffId: '',
@@ -309,7 +314,9 @@ export default function Register() {
                 required
               >
                 <option value="">Select Role</option>
-                {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+                {Object.entries(rolesAndDepartments.roles)
+                  .filter(([, roleData]) => !RESTRICTED_REGISTRATION_ROLE_DISPLAY_NAMES.includes(roleData.displayName))
+                  .map(([roleKey, roleData]) => (
                   <option key={roleKey} value={roleKey}>
                     {roleData.displayName}
                   </option>

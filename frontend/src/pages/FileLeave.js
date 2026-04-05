@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { leaveAPI, staffAPI } from '../api';
 
 function FileLeave({ staffId }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editingLeaveId, setEditingLeaveId] = useState('');
   const [formData, setFormData] = useState({
     leaveId: '',
     staffId: staffId || '',
@@ -16,11 +19,32 @@ function FileLeave({ staffId }) {
     leaveDetails: '',
     leaveDetailsSpecific: {},
     workingDaysApplied: '',
-    startDate: '',
-    endDate: '',
-    communicationNotRequested: false,
-    communicationRequested: false,
+    dateRanges: [
+      { startDate: '', endDate: '' }
+    ],
+    commutationNotRequested: false,
+    commutationRequested: false,
+    lateFilingExplanation: '',
   });
+
+  const [showLateExplanation, setShowLateExplanation] = useState(false);
+  // Check if leave is filed at least 5 days before ANY start date in dateRanges
+  useEffect(() => {
+    if (formData.dateRanges && formData.filingDate) {
+      const filing = new Date(formData.filingDate + 'T00:00:00');
+      const anyLate = formData.dateRanges.some(range => {
+        if (range.startDate) {
+          const start = new Date(range.startDate + 'T00:00:00');
+          const diffDays = Math.ceil((start - filing) / (1000 * 3600 * 24));
+          return diffDays < 5;
+        }
+        return false;
+      });
+      setShowLateExplanation(anyLate);
+    } else {
+      setShowLateExplanation(false);
+    }
+  }, [formData.dateRanges, formData.filingDate]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,23 +57,37 @@ function FileLeave({ staffId }) {
   }, [staffId]);
 
   useEffect(() => {
-    // Calculate number of days when dates change
-    if (formData.startDate && formData.endDate) {
-      const start = new Date(formData.startDate + 'T00:00:00');
-      const end = new Date(formData.endDate + 'T00:00:00');
-      
-      if (start <= end) {
-        // Calculate total days inclusive
-        const timeDifference = end - start;
-        const daysDifference = Math.floor(timeDifference / (1000 * 3600 * 24)) + 1;
-        
-        setFormData(prev => ({
-          ...prev,
-          workingDaysApplied: daysDifference.toString()
-        }));
-      }
+    if (!staffId) {
+      return;
     }
-  }, [formData.startDate, formData.endDate]);
+
+    const editId = searchParams.get('edit');
+    if (editId) {
+      fetchLeaveForEdit(editId);
+    } else {
+      setEditingLeaveId('');
+    }
+  }, [staffId, searchParams]);
+
+  useEffect(() => {
+    // Calculate total working days for all date ranges
+    let totalDays = 0;
+    formData.dateRanges.forEach(range => {
+      if (range.startDate && range.endDate) {
+        const start = new Date(range.startDate + 'T00:00:00');
+        const end = new Date(range.endDate + 'T00:00:00');
+        if (start <= end) {
+          const timeDifference = end - start;
+          const daysDifference = Math.floor(timeDifference / (1000 * 3600 * 24)) + 1;
+          totalDays += daysDifference;
+        }
+      }
+    });
+    setFormData(prev => ({
+      ...prev,
+      workingDaysApplied: totalDays ? totalDays.toString() : ''
+    }));
+  }, [formData.dateRanges]);
 
   const fetchStaffName = async () => {
     try {
@@ -78,17 +116,47 @@ function FileLeave({ staffId }) {
     }
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    
-    if (type === 'checkbox' && name === 'leaveType') {
+  const fetchLeaveForEdit = async (leaveId) => {
+    try {
+      const response = await leaveAPI.getById(leaveId);
+      const leave = response.data;
+
+      if (leave.staffId !== staffId) {
+        setError('You can only edit your own leave request');
+        return;
+      }
+
+      setEditingLeaveId(leave.leaveId);
       setFormData(prev => ({
         ...prev,
-        leaveType: checked
-          ? [...prev.leaveType, value]
-          : prev.leaveType.filter(type => type !== value)
+        leaveId: leave.leaveId || '',
+        staffId,
+        office: leave.office || prev.office,
+        position: leave.position || prev.position,
+        salary: leave.salary ?? prev.salary,
+        filingDate: leave.filingDate ? new Date(leave.filingDate).toISOString().split('T')[0] : prev.filingDate,
+        leaveType: leave.leaveType ? [leave.leaveType] : [],
+        leaveDetails: leave.reason || '',
+        leaveDetailsSpecific: leave.leaveDetailsSpecific || {},
+        workingDaysApplied: leave.numberOfDays ? String(leave.numberOfDays) : prev.workingDaysApplied,
+        startDate: leave.startDate ? new Date(leave.startDate).toISOString().split('T')[0] : '',
+        endDate: leave.endDate ? new Date(leave.endDate).toISOString().split('T')[0] : '',
+        commutationNotRequested: Boolean(leave.commutationNotRequested),
+        commutationRequested: Boolean(leave.commutationRequested),
       }));
-    } else if (type === 'checkbox' && (name === 'communicationNotRequested' || name === 'communicationRequested')) {
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load leave request for editing');
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    if (type === 'radio' && name === 'leaveType') {
+      setFormData(prev => ({
+        ...prev,
+        leaveType: [value],
+      }));
+    } else if (type === 'checkbox' && (name === 'commutationNotRequested' || name === 'commutationRequested')) {
       setFormData(prev => ({
         ...prev,
         [name]: checked,
@@ -99,6 +167,32 @@ function FileLeave({ staffId }) {
         [name]: value,
       });
     }
+  };
+
+  // Handle change for date ranges
+  const handleDateRangeChange = (idx, field, value) => {
+    setFormData(prev => {
+      const newRanges = prev.dateRanges.map((range, i) =>
+        i === idx ? { ...range, [field]: value } : range
+      );
+      return { ...prev, dateRanges: newRanges };
+    });
+  };
+
+  // Add new date range
+  const addDateRange = () => {
+    setFormData(prev => ({
+      ...prev,
+      dateRanges: [...prev.dateRanges, { startDate: '', endDate: '' }]
+    }));
+  };
+
+  // Remove a date range
+  const removeDateRange = (idx) => {
+    setFormData(prev => ({
+      ...prev,
+      dateRanges: prev.dateRanges.filter((_, i) => i !== idx)
+    }));
   };
 
   const handleLeaveDetailsChange = (key, value) => {
@@ -130,6 +224,43 @@ function FileLeave({ staffId }) {
       return;
     }
 
+    // Calculate total days for this filing
+    let totalDays = 0;
+    formData.dateRanges.forEach(range => {
+      if (range.startDate && range.endDate) {
+        const start = new Date(range.startDate + 'T00:00:00');
+        const end = new Date(range.endDate + 'T00:00:00');
+        if (start <= end) {
+          const timeDifference = end - start;
+          const daysDifference = Math.floor(timeDifference / (1000 * 3600 * 24)) + 1;
+          totalDays += daysDifference;
+        }
+      }
+    });
+
+    // Prevent more than 5 days for force leave in a single filing
+    if (formData.leaveType[0] === 'Mandatory/Force Leave' && totalDays > 5) {
+      setError('You cannot file more than 5 days for Force Leave in a single application.');
+      return;
+    }
+
+    // Check 5-day prior rule for all date ranges
+    if (formData.dateRanges && formData.filingDate) {
+      const filing = new Date(formData.filingDate + 'T00:00:00');
+      const anyLate = formData.dateRanges.some(range => {
+        if (range.startDate) {
+          const start = new Date(range.startDate + 'T00:00:00');
+          const diffDays = Math.ceil((start - filing) / (1000 * 3600 * 24));
+          return diffDays < 5;
+        }
+        return false;
+      });
+      if (anyLate && !formData.lateFilingExplanation.trim()) {
+        setError('If filing less than 5 days before any leave date, please provide an explanation.');
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       
@@ -138,17 +269,32 @@ function FileLeave({ staffId }) {
       
       // Only submit the fields that the backend expects
       const submitData = {
-        leaveId: generateLeaveId(),
+        leaveId: editingLeaveId || generateLeaveId(),
         staffId: staffId,
         staffName: staffName,
+        office: formData.office || null,
+        position: formData.position || null,
+        salary: formData.salary ? Number(formData.salary) : null,
+        filingDate: formData.filingDate || null,
         leaveType: formData.leaveType[0], // Send first selected leave type as string
-        startDate: formData.startDate || null,
-        endDate: formData.endDate || null,
+        dateRanges: formData.dateRanges,
         reason: formData.leaveDetails || null,
+        leaveDetailsSpecific: formData.leaveDetailsSpecific || {},
+        lateFilingExplanation: formData.lateFilingExplanation || undefined,
+        commutationNotRequested: formData.commutationNotRequested,
+        commutationRequested: formData.commutationRequested,
       };
       
-      await leaveAPI.create(submitData);
-      setSuccess('Leave request filed successfully!');
+      if (editingLeaveId) {
+        await leaveAPI.update(editingLeaveId, submitData);
+        setSuccess('Leave request updated and resubmitted successfully!');
+      } else {
+        await leaveAPI.create(submitData);
+        setSuccess('Leave request filed successfully!');
+      }
+
+      setEditingLeaveId('');
+      setSearchParams({});
       setFormData({
         leaveId: '',
         staffId,
@@ -163,10 +309,10 @@ function FileLeave({ staffId }) {
         leaveDetails: '',
         leaveDetailsSpecific: {},
         workingDaysApplied: '',
-        startDate: '',
-        endDate: '',
-        communicationNotRequested: false,
-        communicationRequested: false,
+        dateRanges: [{ startDate: '', endDate: '' }],
+        commutationNotRequested: false,
+        commutationRequested: false,
+        lateFilingExplanation: '',
       });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to file leave');
@@ -271,7 +417,7 @@ function FileLeave({ staffId }) {
         <div className="border-b pb-6">
           <h2 className="text-xl font-bold mb-4">Details of Application</h2>
 
-          {/* A. Type of Leave */}
+          {/* A. Type of Leave to be Availed */}
           <div className="mb-6">
             <label className="block font-bold mb-3">A. Type of Leave to be Availed *</label>
             <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded">
@@ -289,14 +435,16 @@ function FileLeave({ staffId }) {
                 'Special Leave Benefits for Women',
                 'Special Emergency (Calamity) Leave',
                 'Adoption Leave',
+                'Tardy',
+                'Undertime',
                 'Others'
               ].map(type => (
                 <label key={type} className="flex items-center">
                   <input
-                    type="checkbox"
+                    type="radio"
                     name="leaveType"
                     value={type}
-                    checked={formData.leaveType.includes(type)}
+                    checked={formData.leaveType[0] === type}
                     onChange={handleChange}
                     className="mr-2"
                   />
@@ -479,38 +627,64 @@ function FileLeave({ staffId }) {
             <p className="text-sm text-gray-600 mt-2">Automatically calculated based on start and end dates (inclusive)</p>
           </div>
 
-          {/* Inclusive Dates */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block font-bold mb-2">Start Date (Inclusive)</label>
-              <input
-                type="date"
-                name="startDate"
-                value={formData.startDate}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block font-bold mb-2">End Date (Inclusive)</label>
-              <input
-                type="date"
-                name="endDate"
-                value={formData.endDate}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          {/* Inclusive Dates (Multiple) */}
+          <div className="mb-6">
+            <label className="block font-bold mb-2">Inclusive Dates *</label>
+            {formData.dateRanges.map((range, idx) => (
+              <div key={idx} className="grid grid-cols-2 gap-4 mb-2 items-end">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={range.startDate}
+                    onChange={e => handleDateRangeChange(idx, 'startDate', e.target.value)}
+                    className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2 items-end">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={range.endDate}
+                      onChange={e => handleDateRangeChange(idx, 'endDate', e.target.value)}
+                      className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  {formData.dateRanges.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeDateRange(idx)}
+                      className="ml-2 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                      title="Remove this date range"
+                    >
+                      –
+                    </button>
+                  )}
+                  {idx === formData.dateRanges.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={addDateRange}
+                      className="ml-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                      title="Add another date range"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <p className="text-sm text-gray-600 mt-2">Add more date ranges for non-consecutive leave days.</p>
           </div>
 
-          {/* D. Communication */}
+          {/* D. Commutation */}
           <div>
-            <label className="block font-bold mb-3">D. Communication</label>
+            <label className="block font-bold mb-3">D. Commutation</label>
             <label className="flex items-center mb-2">
               <input
                 type="checkbox"
-                name="communicationNotRequested"
-                checked={formData.communicationNotRequested}
+                name="commutationNotRequested"
+                checked={formData.commutationNotRequested}
                 onChange={handleChange}
                 className="mr-2"
               />
@@ -519,8 +693,8 @@ function FileLeave({ staffId }) {
             <label className="flex items-center">
               <input
                 type="checkbox"
-                name="communicationRequested"
-                checked={formData.communicationRequested}
+                name="commutationRequested"
+                checked={formData.commutationRequested}
                 onChange={handleChange}
                 className="mr-2"
               />
@@ -529,12 +703,27 @@ function FileLeave({ staffId }) {
           </div>
         </div>
 
+        {/* Late Filing Explanation logic will need to be updated to check all date ranges, not just the first */}
+        {showLateExplanation && (
+          <div className="mb-6">
+            <label className="block font-bold mb-2 text-red-600">Explanation for Late Filing *</label>
+            <textarea
+              name="lateFilingExplanation"
+              value={formData.lateFilingExplanation}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-red-500"
+              rows={3}
+              required={showLateExplanation}
+              placeholder="Please explain why you are filing less than 5 days before any leave start date."
+            />
+          </div>
+        )}
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 font-bold"
         >
-          {loading ? 'Filing...' : 'File Leave Request'}
+          {loading ? (editingLeaveId ? 'Updating...' : 'Filing...') : (editingLeaveId ? 'Update & Resubmit Leave Request' : 'File Leave Request')}
         </button>
       </form>
     </div>

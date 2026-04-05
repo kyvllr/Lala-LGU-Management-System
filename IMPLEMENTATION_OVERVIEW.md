@@ -181,8 +181,8 @@ If 401: Auto-logout, redirect to login
 ❌ CANNOT DO:
   • View other staff info
   • Manage staff accounts
-  • Approve/reject leaves
-  • Approve/reject travel orders
+  • Approve/disapprove leaves
+  • Approve/disapprove travel orders
   • View admin reports
 ```
 
@@ -195,10 +195,10 @@ If 401: Auto-logout, redirect to login
   • Update staff information
   • Delete staff accounts
   • View all leaves
-  • Approve/reject any leave
+  • Approve/disapprove any leave
   • Delete any leave
   • View all travel orders
-  • Approve/reject any order
+  • Approve/disapprove any order
   • Mark any order as completed
   • Delete any order
   • Full system access
@@ -238,7 +238,7 @@ GET    /leaves/staff/:id   → Staff leaves
 GET    /leave/:id          → Single leave
 PUT    /leaves/:id         → Update (staff own pending)
 PATCH  /leaves/:id/approve → Approve (admin)
-PATCH  /leaves/:id/reject  → Reject (admin)
+PATCH  /leaves/:id/disapprove  → Disapprove (admin)
 DELETE /leaves/:id         → Delete
 ```
 
@@ -250,7 +250,7 @@ GET    /travel-orders/staff/:id    → Staff orders
 GET    /travel-order/:id           → Single order
 PUT    /travel-orders/:id          → Update (staff own pending)
 PATCH  /travel-orders/:id/approve  → Approve (admin)
-PATCH  /travel-orders/:id/reject   → Reject (admin)
+PATCH  /travel-orders/:id/disapprove   → Disapprove (admin)
 PATCH  /travel-orders/:id/complete → Mark completed
 DELETE /travel-orders/:id          → Delete
 ```

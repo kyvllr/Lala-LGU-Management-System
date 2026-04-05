@@ -46,6 +46,29 @@ npm start
 ```
 Browser opens at `http://localhost:3000`
 
+## Default Seeded Test Accounts
+
+Run the seed script first:
+
+```bash
+cd /Users/kayevillar/Documents/filingSystem
+npm run seed
+```
+
+### Admin Accounts
+- Super Admin/Mayor: `mayor@lgu.gov` / `Admin_0`
+- Admin/HR: `admin@lgu.gov` / `Admin_0`
+
+### Other Role Accounts
+- Head of Requisitioning Office: `head.generalservices@lgu.gov` / `HRO_0`
+- Municipal Budget Officer: `mbo@lgu.gov` / `MBO_0`
+- Municipal Assessor: `assessor@lgu.gov` / `MA_0`
+- Job Order Officer: `jooofficer@lgu.gov` / `Officer_0`
+- Head Officer (Municipal Engineering): `head.engineeringoffice@lgu.gov` / `Head_0`
+- Head Officer (Local Civil Registrar): `head.lcr@lgu.gov` / `Head_0`
+- Staff (Municipal Engineering): `staff.engineeringoffice@lgu.gov` / `Staff_0`
+- Staff (Municipal Administrator): `staff.administrator@lgu.gov` / `Staff_0`
+
 ## First Time Setup
 
 ### Option A: Create Accounts via UI
@@ -143,12 +166,12 @@ Response includes `token` - use this in API calls
 3. **Approve Leaves**
    - Click "Approve Leaves"
    - See all pending leaves
-   - Click Approve/Reject with remarks
+   - Click Approve/Disapprove with remarks
 
 4. **Approve Travel Orders**
    - Click "Approve Travel Orders"
    - See all pending orders
-   - Click Approve/Reject with remarks
+   - Click Approve/Disapprove with remarks
 
 ## API Testing with Postman
 
@@ -270,9 +293,9 @@ Body (JSON):
 }
 ```
 
-**PATCH - Reject Leave (Admin Only)**
+**PATCH - Disapprove Leave (Admin Only)**
 ```
-URL: http://localhost:5001/leaves/L001/reject
+URL: http://localhost:5001/leaves/L001/disapprove
 Method: PATCH
 Headers:
   Authorization: Bearer <admin_token>
@@ -396,9 +419,9 @@ filingSystem/
 - [x] Role-based access control (Staff/Admin)
 - [x] Staff management (Admin only)
 - [x] File leave requests (Staff)
-- [x] Approve/reject leaves (Admin)
+- [x] Approve/disapprove leaves (Admin)
 - [x] File travel orders (Staff)
-- [x] Approve/reject travel orders (Admin)
+- [x] Approve/disapprove travel orders (Admin)
 - [x] View own records (Staff)
 - [x] View all records (Admin)
 - [x] Edit/delete pending requests (Staff)

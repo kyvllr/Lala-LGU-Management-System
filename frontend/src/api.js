@@ -46,9 +46,10 @@ export const staffAPI = {
   delete: (id) => api.delete(`/staffs/${id}`),
   getPending: () => api.get('/staffs-pending'),
   approve: (id) => api.patch(`/staffs/${id}/approve`),
-  reject: (id) => api.patch(`/staffs/${id}/reject`),
+  disapprove: (id) => api.patch(`/staffs/${id}/disapprove`),
   debugGetAll: () => api.get('/staffs-debug'),
   updateESignPermission: (id, permission) => api.patch(`/staffs/${id}/esign-permission`, { eSignPermission: permission }),
+  updateAccountStatus: (id, isActive) => api.patch(`/staffs/${id}/account-status`, { isActive }),
 };
 
 // Auth API
@@ -56,6 +57,7 @@ export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (email, password) => api.post('/auth/login', { email, password }),
   getCurrentUser: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
 };
 
 // System Configuration API
@@ -63,22 +65,34 @@ export const systemAPI = {
   getRolesAndDepartments: () => api.get('/system/roles-and-departments'),
 };
 
+// System Logs API
+export const systemLogAPI = {
+  getAll: (params = {}) => api.get('/system-logs', { params }),
+  create: (data) => api.post('/system-logs', data),
+};
+
 // Personal Data Sheet API
 export const personalDataSheetAPI = {
   submit: (data) => api.post('/personal-data-sheets', data),
+  update: (pdsId, data) => api.put(`/personal-data-sheets/${pdsId}`, data),
+  getMy: () => api.get('/personal-data-sheets/my'),
   getAll: (status) => api.get('/personal-data-sheets', { params: { status } }),
   review: (pdsId, status, remarks = '') => api.patch(`/personal-data-sheets/${pdsId}/review`, { status, remarks }),
 };
 
 // Leave API
 export const leaveAPI = {
-  getAll: (status) => api.get('/leaves', { params: { status } }),
+  getAll: (status) => {
+    const normalizedStatus = status === 'Disapproved' ? 'Disapproved' : status;
+    return api.get('/leaves', { params: { status: normalizedStatus } });
+  },
   getById: (id) => api.get(`/leave/${id}`),
   getByStaffId: (staffId) => api.get(`/leaves/staff/${staffId}`),
   create: (data) => api.post('/leaves', data),
   update: (id, data) => api.put(`/leaves/${id}`, data),
   approve: (id, data) => api.patch(`/leaves/${id}/approve`, data),
-  reject: (id, data) => api.patch(`/leaves/${id}/reject`, data),
+  revise: (id, data) => api.patch(`/leaves/${id}/revise`, data),
+  disapprove: (id, data) => api.patch(`/leaves/${id}/disapprove`, data),
   delete: (id) => api.delete(`/leaves/${id}`),
 };
 
@@ -90,9 +104,23 @@ export const travelOrderAPI = {
   create: (data) => api.post('/travel-orders', data),
   update: (id, data) => api.put(`/travel-orders/${id}`, data),
   approve: (id, data) => api.patch(`/travel-orders/${id}/approve`, data),
-  reject: (id, data) => api.patch(`/travel-orders/${id}/reject`, data),
+  revise: (id, data) => api.patch(`/travel-orders/${id}/revise`, data),
+  disapprove: (id, data) => api.patch(`/travel-orders/${id}/disapprove`, data),
   complete: (id) => api.patch(`/travel-orders/${id}/complete`),
   delete: (id) => api.delete(`/travel-orders/${id}`),
+};
+
+// Overtime API
+export const overtimeAPI = {
+  getAll: (status) => api.get('/overtimes', { params: { status } }),
+  getById: (id) => api.get(`/overtime/${id}`),
+  getByStaffId: (staffId) => api.get(`/overtimes/staff/${staffId}`),
+  create: (data) => api.post('/overtimes', data),
+  update: (id, data) => api.put(`/overtimes/${id}`, data),
+  approve: (id, data) => api.patch(`/overtimes/${id}/approve`, data),
+  revise: (id, data) => api.patch(`/overtimes/${id}/revise`, data),
+  disapprove: (id, data) => api.patch(`/overtimes/${id}/disapprove`, data),
+  delete: (id) => api.delete(`/overtimes/${id}`),
 };
 
 // Service Record API
@@ -115,6 +143,10 @@ export const leaveRecordAPI = {
   create: (data) => {
     console.log('[leaveRecordAPI.create] Creating record with data:', data);
     return api.post('/leave-records', data);
+  },
+  importBatch: (records) => {
+    // POST /leave-records/import
+    return api.post('/leave-records/import', records);
   },
   update: (recordId, data) => api.put(`/leave-records/${recordId}`, data),
   delete: (recordId) => api.delete(`/leave-records/${recordId}`),

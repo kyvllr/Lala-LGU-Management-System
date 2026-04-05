@@ -69,12 +69,12 @@ async function seedAccounts() {
       },
       {
         id: 'HRO001',
-        name: 'Head of Requisitioning Office',
-        email: 'hro@lgu.gov',
+        name: 'Head Officer - Municipal General Services',
+        email: 'head.generalservices@lgu.gov',
         password: 'HRO_0',
         role: ROLES.HEAD_REQUISITIONING_OFFICE,
         position: 'Head of Requisitioning Office',
-        department: 'Requisitioning Office',
+        department: 'General Services',
       },
       {
         id: 'MBO001',
@@ -83,7 +83,7 @@ async function seedAccounts() {
         password: 'MBO_0',
         role: ROLES.MUNICIPAL_BUDGET_OFFICER,
         position: 'Municipal Budget Officer',
-        department: 'Budget Office',
+        department: 'Budget',
       },
       {
         id: 'MA001',
@@ -92,7 +92,7 @@ async function seedAccounts() {
         password: 'MA_0',
         role: ROLES.MUNICIPAL_ASSESSOR,
         position: 'Municipal Assessor',
-        department: 'Assessor Office',
+        department: 'Assessor',
       },
       {
         id: 'JOO001',
@@ -105,8 +105,8 @@ async function seedAccounts() {
       },
       {
         id: 'HO001',
-        name: 'Head Officer - Engineering',
-        email: 'head.engineering@lgu.gov',
+        name: 'Head Officer - Municipal Engineering',
+        email: 'head.engineeringoffice@lgu.gov',
         password: 'Head_0',
         role: ROLES.HEAD_OFFICER,
         position: 'Head Officer',
@@ -114,7 +114,7 @@ async function seedAccounts() {
       },
       {
         id: 'HO002',
-        name: 'Head Officer - LCR',
+        name: 'Head Officer - Local Civil Registrar',
         email: 'head.lcr@lgu.gov',
         password: 'Head_0',
         role: ROLES.HEAD_OFFICER,
@@ -123,8 +123,8 @@ async function seedAccounts() {
       },
       {
         id: 'STAFF001',
-        name: 'Staff Member - Engineering',
-        email: 'staff.engineering@lgu.gov',
+        name: 'Staff Member - Municipal Engineering',
+        email: 'staff.engineeringoffice@lgu.gov',
         password: 'Staff_0',
         role: ROLES.STAFF,
         position: 'Staff',
@@ -132,43 +132,89 @@ async function seedAccounts() {
       },
       {
         id: 'STAFF002',
-        name: 'Staff Member - HR',
-        email: 'staff.hr@lgu.gov',
+        name: 'Staff Member - Municipal Administrator',
+        email: 'staff.administrator@lgu.gov',
         password: 'Staff_0',
         role: ROLES.STAFF,
         position: 'Staff',
-        department: 'HR',
+        department: 'Administrator',
       }
     ];
 
-    // Create accounts
+    // Create or update accounts safely
     for (const account of testAccounts) {
-      const existing = await Staff.findOne({ email: account.email });
-      if (existing) {
-        console.log(`⚠️  ${account.email} already exists`);
-        continue;
-      }
+      try {
+        const hashedPassword = await bcrypt.hash(account.password, 10);
+        const updatePayload = {
+          name: account.name,
+          email: account.email,
+          password: hashedPassword,
+          role: account.role,
+          position: account.position,
+          department: account.department,
+          isApproved: true,
+          approvedAt: Date.now(),
+          approvedBy: 'System (Seed)',
+        };
 
-      const hashedPassword = await bcrypt.hash(account.password, 10);
-      const newAccount = new Staff({
-        id: account.id,
-        name: account.name,
-        email: account.email,
-        password: hashedPassword,
-        role: account.role,
-        position: account.position,
-        department: account.department,
-        isApproved: true,
-        approvedAt: Date.now(),
-        approvedBy: 'System (Seed)',
-      });
+        const existingById = await Staff.findOne({ id: account.id });
 
-      await newAccount.save();
-      console.log(`✓ ${ROLE_DISPLAY_NAMES[account.role]} account created`);
-      console.log(`  Email: ${account.email}`);
-      console.log(`  Password: ${account.password}`);
-      if (account.department) {
-        console.log(`  Department: ${account.department}`);
+        if (existingById) {
+          const conflictByEmail = await Staff.findOne({
+            email: account.email,
+            id: { $ne: account.id },
+          });
+
+          if (conflictByEmail) {
+            console.log(`⚠️  Skipped ${account.id}: email ${account.email} is already used by ${conflictByEmail.id}`);
+            continue;
+          }
+
+          await Staff.updateOne({ id: account.id }, { $set: updatePayload });
+          console.log(`↺ ${ROLE_DISPLAY_NAMES[account.role]} account updated`);
+          console.log(`  ID: ${account.id}`);
+          console.log(`  Email: ${account.email}`);
+          if (account.department) {
+            console.log(`  Department: ${account.department}`);
+          }
+          continue;
+        }
+
+        const existingByEmail = await Staff.findOne({ email: account.email });
+        if (existingByEmail) {
+          await Staff.updateOne(
+            { email: account.email },
+            {
+              $set: {
+                id: account.id,
+                ...updatePayload,
+              },
+            }
+          );
+          console.log(`↺ ${ROLE_DISPLAY_NAMES[account.role]} account updated (migrated from ${existingByEmail.id} to ${account.id})`);
+          console.log(`  ID: ${account.id}`);
+          console.log(`  Email: ${account.email}`);
+          if (account.department) {
+            console.log(`  Department: ${account.department}`);
+          }
+          continue;
+        }
+
+        const newAccount = new Staff({
+          id: account.id,
+          ...updatePayload,
+        });
+
+        await newAccount.save();
+        console.log(`✓ ${ROLE_DISPLAY_NAMES[account.role]} account created`);
+        console.log(`  ID: ${account.id}`);
+        console.log(`  Email: ${account.email}`);
+        console.log(`  Password: ${account.password}`);
+        if (account.department) {
+          console.log(`  Department: ${account.department}`);
+        }
+      } catch (accountError) {
+        console.log(`⚠️  Skipped ${account.id}: ${accountError.message}`);
       }
     }
 

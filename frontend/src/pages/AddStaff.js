@@ -1,6 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { staffAPI, systemAPI } from '../api';
-import { ROLE_DISPLAY_NAMES, ROLES_WITH_DEPARTMENTS } from '../constants';
+
+const ALLOWED_ROLE_DISPLAY_NAMES = [
+  'Super Admin/Mayor',
+  'Admin/HR (Human Resources)',
+  'Head of Requisitioning officer',
+  'Job order officer',
+  'Head Officer',
+  'Staff',
+];
+
+const ALLOWED_DEPARTMENTS = [
+  'Accountant',
+  'Assessor',
+  'LCR',
+  'Treasurer',
+  'General Services',
+  'Engineering',
+  'Planning and Development',
+  'Tourism',
+  'DRRM',
+  'Social Welfare and Development',
+  'Health Office',
+  'Economic Enterprise and Development',
+  'Secretary to the Sangguniang Bayan',
+  'Budget',
+  'Agriculture',
+  'Administrator',
+];
 
 function AddStaff() {
   const [formData, setFormData] = useState({
@@ -23,6 +50,14 @@ function AddStaff() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const filteredRoles = Object.entries(rolesAndDepartments?.roles || {})
+    .filter(([, roleData]) => ALLOWED_ROLE_DISPLAY_NAMES.includes(roleData.displayName))
+    .sort(([, firstRoleData], [, secondRoleData]) => firstRoleData.displayName.localeCompare(secondRoleData.displayName));
+
+  const filteredDepartments = (rolesAndDepartments?.departments || [])
+    .filter((department) => ALLOWED_DEPARTMENTS.includes(department))
+    .sort((firstDepartment, secondDepartment) => firstDepartment.localeCompare(secondDepartment));
+
   // Fetch available roles and departments on component mount
   useEffect(() => {
     const fetchRolesAndDepartments = async () => {
@@ -41,9 +76,7 @@ function AddStaff() {
     
     // Reset department if role is changed and new role doesn't require department
     if (name === 'role') {
-      const requiresDept = Object.keys(rolesAndDepartments?.roles || {}).some(
-        role => rolesAndDepartments.roles[role].requiresDepartment && role === value
-      );
+      const requiresDept = rolesAndDepartments?.roles?.[value]?.requiresDepartment;
       
       setFormData({
         ...formData,
@@ -195,7 +228,7 @@ function AddStaff() {
               required
             >
               <option value="">Select a role</option>
-              {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+              {filteredRoles.map(([roleKey, roleData]) => (
                 <option key={roleKey} value={roleKey}>
                   {roleData.displayName}
                 </option>
@@ -233,7 +266,7 @@ function AddStaff() {
               required
             >
               <option value="">Select a department</option>
-              {rolesAndDepartments.departments.map((dept) => (
+              {filteredDepartments.map((dept) => (
                 <option key={dept} value={dept}>
                   {dept}
                 </option>

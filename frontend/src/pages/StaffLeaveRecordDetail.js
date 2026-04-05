@@ -1,10 +1,147 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { TbArrowLeft, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveRecordAPI } from '../api';
 import { isAdmin, normalizeRole } from '../constants';
+import { exportToCsv, importFromCsv } from '../exportCsv';
+
+// ...existing code...
+
+// Helper to format date ranges as '2/11-14/2026', '3/2,3/2026', '4/4/2026'
+function formatDateRanges(dateRanges) {
+  if (!Array.isArray(dateRanges) || dateRanges.length === 0) return 'N/A';
+  // Collect all dates as {month, day, year}
+  let allDates = [];
+  dateRanges.forEach(range => {
+    if (range.from && range.to) {
+      let start = new Date(range.from);
+      let end = new Date(range.to);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        allDates.push({
+          month: d.getMonth() + 1,
+          day: d.getDate(),
+          year: d.getFullYear(),
+        });
+      }
+    }
+  });
+  if (allDates.length === 0) return 'N/A';
+  // Group by year and month
+  const groups = {};
+  allDates.forEach(({ month, day, year }) => {
+    const key = `${month}/${year}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(day);
+  });
+  // If only one group, show as 2/3-5,10,12-13/2026
+  const groupKeys = Object.keys(groups);
+  if (groupKeys.length === 1) {
+    const [monthYear] = groupKeys;
+    const [month, year] = monthYear.split('/');
+    const days = groups[monthYear].sort((a, b) => a - b);
+    let ranges = [];
+    let start = days[0], end = days[0];
+    for (let i = 1; i < days.length; i++) {
+      if (days[i] === end + 1) {
+        end = days[i];
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+        start = end = days[i];
+      }
+    }
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+    return `${month}/${ranges.join(',')}/${year}`;
+  }
+  // If multiple groups, show as 2/3-5,10,12-13/2026; 3/2-4/2026
+  const result = Object.entries(groups).map(([key, days]) => {
+    const [month, year] = key.split('/');
+    days.sort((a, b) => a - b);
+    let ranges = [];
+    let start = days[0], end = days[0];
+    for (let i = 1; i < days.length; i++) {
+      if (days[i] === end + 1) {
+        end = days[i];
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+        start = end = days[i];
+      }
+    }
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+    return `${month}/${ranges.join(',')}/${year}`;
+  });
+  return result.join('; ');
+}
+
+function formatDateValue(dateValue) {
+  if (!dateValue) return 'N/A';
+  const parsed = new Date(dateValue);
+  return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
+}
+
+// Helper to format date for HTML date input (YYYY-MM-DD format)
+function formatDateForInput(dateValue) {
+  if (!dateValue) return '';
+  const parsed = new Date(dateValue);
+  if (isNaN(parsed.getTime())) return '';
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getRecordFromTo(record) {
+  if (Array.isArray(record?.dateRanges) && record.dateRanges.length > 0) {
+    const ranges = record.dateRanges
+      .map(range => ({
+        from: range?.from ? new Date(range.from) : null,
+        to: range?.to ? new Date(range.to) : null,
+      }))
+      .filter(range => range.from && range.to && !isNaN(range.from.getTime()) && !isNaN(range.to.getTime()));
+
+    if (ranges.length > 0) {
+      const fromDate = new Date(Math.min(...ranges.map(range => range.from.getTime())));
+      const toDate = new Date(Math.max(...ranges.map(range => range.to.getTime())));
+      return {
+        from: fromDate.toLocaleDateString(),
+        to: toDate.toLocaleDateString(),
+      };
+    }
+  }
+
+  if (record?.period) {
+    const periodDate = formatDateValue(record.period);
+    return { from: periodDate, to: periodDate };
+  }
+
+  return { from: 'N/A', to: 'N/A' };
+}
 
 function StaffLeaveRecordDetail() {
+  const [importing, setImporting] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
+  const hasNavigatedRef = useRef(false);
+  const particularsOptions = [
+    '10-day VAWC Leave',
+    'Adoption Leave',
+    'Calamity',
+    'CTO',
+    'Earned Leave',
+    'Maternity Leave',
+    'Monetization',
+    'Peternity Leave',
+    'Rehabilitation Privilege',
+    'Sick Leave',
+    'SLB for Women',
+    'Solo Parent Leave',
+    'SPL', // Special Privilege Leave
+    'Study Leave',
+    'Tardy',
+    'Undertime',
+    'Vacation Leave',
+    'Wellness'
+  ];
+
   const { staffId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -14,6 +151,7 @@ function StaffLeaveRecordDetail() {
   const [leaveRecords, setLeaveRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [addError, setAddError] = useState('');
   const [leaveBalance, setLeaveBalance] = useState({
     vacationLeaveBalance: 0,
@@ -25,6 +163,177 @@ function StaffLeaveRecordDetail() {
   });
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const summaryRef = React.useRef();
+  const [conversionUnit, setConversionUnit] = useState('days');
+  const [showConverter, setShowConverter] = useState(false);
+
+  // Print handler for leave summary
+  const handlePrintSummary = () => {
+    if (!summaryRef.current || !staff) {
+      alert('Staff information is not loaded yet. Please wait and try again.');
+      return;
+    }
+    // Robustly access name fields (support both camelCase and snake_case just in case)
+    let lastName = staff.lastName || staff.lastname || '';
+    let firstName = staff.firstName || staff.firstname || '';
+    let middleName = staff.middleName || staff.middlename || '';
+    // If any name part is missing, try to split from staff.name
+    if ((!lastName || !firstName) && staff.name) {
+      const nameParts = staff.name.trim().split(/\s+/);
+      if (nameParts.length === 2) {
+        [firstName, lastName] = nameParts;
+      } else if (nameParts.length === 3) {
+        [firstName, middleName, lastName] = nameParts;
+      } else if (nameParts.length > 3) {
+        firstName = nameParts[0];
+        middleName = nameParts.slice(1, -1).join(' ');
+        lastName = nameParts[nameParts.length - 1];
+      }
+    }
+    const middleInitial = middleName ? middleName.charAt(0).toUpperCase() + '.' : '';
+    const division = staff.division || staff.department || staff.office || '';
+    const firstDayOfService = staff.firstDayOfService || staff.first_day_of_service || staff.dateHired || '';
+    const printContents = summaryRef.current.innerHTML;
+    // Prepare table with 26 rows (fill with blanks if needed)
+    let tableHtml = summaryRef.current.innerHTML;
+    try {
+      // Only modify if table exists
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = tableHtml;
+      const table = tempDiv.querySelector('table');
+      if (table) {
+        const tbody = table.querySelector('tbody');
+        if (tbody) {
+          // Remove TOTAL row if present (last row with 'TOTAL:' in first/second cell)
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          const lastRow = rows[rows.length - 1];
+          if (lastRow) {
+            const firstCell = lastRow.cells[0]?.textContent?.trim().toUpperCase();
+            const secondCell = lastRow.cells[1]?.textContent?.trim().toUpperCase();
+            if ((firstCell === 'TOTAL:' || secondCell === 'TOTAL:')) {
+              tbody.removeChild(lastRow);
+            }
+          }
+          // Add blank rows to reach 26
+          const currentRows = tbody.querySelectorAll('tr').length;
+          const rowsToAdd = 26 - currentRows;
+          for (let i = 0; i < rowsToAdd; i++) {
+            const tr = document.createElement('tr');
+            for (let j = 0; j < 9; j++) {
+              const td = document.createElement('td');
+              td.className = 'px-4 py-2 border';
+              td.innerHTML = '&nbsp;';
+              tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+          }
+        }
+        tableHtml = tempDiv.innerHTML;
+      }
+    } catch (e) { /* fallback: do nothing */ }
+    const printWindow = window.open('', '', 'height=1200,width=900');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Employee's Leave Record</title>
+          <style>
+            @page { size: 8.5in 13in; margin: 0.7in; }
+            body { font-family: Arial, sans-serif; margin: 0.7in; }
+            .print-header { text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 32px; }
+            .print-meta-header {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 32px;
+              width: 100%;
+            }
+            .print-meta-item {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              min-width: 200px;
+              flex: 1;
+            }
+            .print-meta-underline {
+              border-bottom: 1.5px solid #000;
+              min-width: 200px;
+              font-size: 15px;
+              text-align: center;
+              padding-bottom: 2px;
+              margin-bottom: 2px;
+            }
+            .print-meta-label {
+              font-size: 13px;
+              margin-top: 2px;
+              text-align: center;
+            }
+            .print-table { border-collapse: collapse; width: 100%; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 4px 6px; font-size: 11px; }
+            .print-table th { background: #f0f0f0; font-weight: bold; }
+            .print-table tfoot td { font-weight: bold; background: #f9f9f9; }
+          </style>
+        </head>
+        <body>
+          <div class="print-header">EMPLOYEE'S LEAVE RECORD</div>
+          <div class="print-meta-header">
+            <div class="print-meta-item">
+              <div class="print-meta-underline">
+                ${[lastName, firstName, middleInitial].filter(Boolean).join(' ')}
+              </div>
+              <div class="print-meta-label">(Surname) (Given Name) (M.I.)</div>
+            </div>
+            <div class="print-meta-item">
+              <div class="print-meta-underline">${division}</div>
+              <div class="print-meta-label">Division/Office</div>
+            </div>
+            <div class="print-meta-item">
+              <div class="print-meta-underline">${firstDayOfService ? new Date(firstDayOfService).toLocaleDateString() : ''}</div>
+              <div class="print-meta-label">First Day of Service</div>
+            </div>
+          </div>
+          ${tableHtml}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
+  // Conversion helpers: values are stored in days. Convert for display.
+  const convertValue = (days, unit) => {
+    const n = Number(days) || 0;
+    switch (unit) {
+      case 'months':
+        return n / 30;
+      case 'weeks':
+        return n / 7;
+      case 'minutes':
+        return n * 24 * 60;
+      case 'days':
+      default:
+        return n;
+    }
+  };
+
+  const formatConverted = (days, unit) => {
+    const converted = convertValue(days, unit);
+    if (isNaN(converted) || converted === 0) return '';
+    if (unit === 'minutes') return Math.round(converted).toString();
+    return converted.toFixed(2);
+  };
+
+  const formatUndertimeMinutes = (days) => {
+    const value = Number(days) || 0;
+    if (value === 0) return '';
+    return Math.round(value * 24 * 60).toString();
+  };
+
+  const isUndertimeParticulars = (particulars) =>
+    String(particulars || '').toLowerCase().includes('undertime');
+  const [activeTab, setActiveTab] = useState('records');
   const [editingRecordId, setEditingRecordId] = useState(null);
   const [newRecordData, setNewRecordData] = useState({
     period: '',
@@ -53,14 +362,45 @@ function StaffLeaveRecordDetail() {
     slAbsentUndertimeWPay: '',
     cto: '',
   });
+  // Add to state: newRecordDateRanges for add form, editRecordDateRanges for edit form
+  const [newRecordDateRanges, setNewRecordDateRanges] = useState([{ from: '', to: '' }]);
+  const [editRecordDateRanges, setEditRecordDateRanges] = useState([{ from: '', to: '' }]);
 
   const staffName = location.state?.staffName || '';
+
+  const showSuccessMessage = (message) => {
+    setSuccessMessage(message);
+    setTimeout(() => {
+      setSuccessMessage('');
+    }, 3000);
+  };
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user'));
     setUser(storedUser ? { ...storedUser, role: normalizeRole(storedUser.role) } : storedUser);
+    
+    // Check if user is trying to access someone else's record (non-admin)
+    const normalizedRole = normalizeRole(storedUser?.role);
+    const ownStaffId = storedUser?.staffId || storedUser?.id;
+    const ownStaffIdStr = ownStaffId ? String(ownStaffId) : '';
+    const routeStaffIdStr = staffId ? String(staffId) : '';
+    const targetPath = ownStaffIdStr ? `/employee-leave-record/${ownStaffIdStr}` : '';
+    const isAlreadyOnTargetPath = !!targetPath && location.pathname === targetPath;
+    
+    if (
+      !isAdmin(normalizedRole) &&
+      ownStaffIdStr &&
+      ownStaffIdStr !== routeStaffIdStr &&
+      !isAlreadyOnTargetPath &&
+      !hasNavigatedRef.current
+    ) {
+      hasNavigatedRef.current = true;
+      navigate(targetPath, { replace: true, state: { staffName: storedUser?.name } });
+      return;
+    }
+    
     fetchData();
-  }, [staffId]);
+  }, [staffId, navigate, location.pathname]);
 
   const fetchData = async () => {
     try {
@@ -108,12 +448,10 @@ function StaffLeaveRecordDetail() {
         const recordsRes = await leaveRecordAPI.getByStaffId(actualStaffId);
         console.log('[fetchData] API response object:', recordsRes);
         console.log('[fetchData] API response.data:', recordsRes.data);
-        
         // Backend returns { data: records }
         // axios wraps it as response.data = { data: records }
         // So we need recordsRes.data.data
         let records = [];
-        
         if (recordsRes.data && recordsRes.data.data && Array.isArray(recordsRes.data.data)) {
           // Response structure: { data: {..., data: records} }
           records = recordsRes.data.data;
@@ -130,7 +468,22 @@ function StaffLeaveRecordDetail() {
           console.warn('[fetchData] Unexpected response structure:', typeof recordsRes.data, recordsRes.data);
           records = [];
         }
-        
+        // Sort by earliest date in dateRanges or period
+        records = [...records].sort((a, b) => {
+          const getEarliest = (rec) => {
+            if (Array.isArray(rec.dateRanges) && rec.dateRanges.length > 0) {
+              return Math.min(...rec.dateRanges.map(r => new Date(r.from).getTime()));
+            }
+            return rec.period ? new Date(rec.period).getTime() : 0;
+          };
+          const aEarliest = getEarliest(a);
+          const bEarliest = getEarliest(b);
+          if (aEarliest !== bEarliest) return aEarliest - bEarliest;
+          // fallback: createdAt
+          const createdA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const createdB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return createdA - createdB;
+        });
         console.log('[fetchData] Leave records count:', records.length);
         console.log('[fetchData] Records:', JSON.stringify(records, null, 2));
         if (records.length > 0) {
@@ -138,7 +491,6 @@ function StaffLeaveRecordDetail() {
           console.log('[fetchData] First record staffId:', records[0].staffId);
         }
         setLeaveRecords(records);
-
         // Calculate leave balance
         calculateLeaveBalance(records);
       } catch (apiErr) {
@@ -172,12 +524,33 @@ function StaffLeaveRecordDetail() {
       let vlEarned = 0;
       let slEarned = 0;
 
-      // Process each record to calculate balance
+      // Only VL, SL, Undertime, Tardy, and Earned Leave affect balances
       records.forEach(record => {
-        vlEarned += parseFloat(record.vlEarned) || 0;
-        vlAbsent += parseFloat(record.vlAbsentUndertimeWPay) || 0;
-        slEarned += parseFloat(record.slEarned) || 0;
-        slAbsent += parseFloat(record.slAbsentUndertimeWPay) || 0;
+        const particulars = String(record.particulars || '').toLowerCase();
+        // Vacation Leave balance
+        if (
+          particulars.includes('vacation leave') ||
+          particulars === 'vl' ||
+          particulars.includes('earned leave')
+        ) {
+          vlEarned += parseFloat(record.vlEarned) || 0;
+          vlAbsent += parseFloat(record.vlAbsentUndertimeWPay) || 0;
+        } else if (particulars.includes('undertime') || particulars.includes('tardy')) {
+          // Only count undertime/tardy for VL if not SL
+          vlAbsent += parseFloat(record.vlAbsentUndertimeWPay) || 0;
+        }
+        // Sick Leave balance
+        if (
+          particulars.includes('sick leave') ||
+          particulars === 'sl' ||
+          particulars.includes('earned leave')
+        ) {
+          slEarned += parseFloat(record.slEarned) || 0;
+          slAbsent += parseFloat(record.slAbsentUndertimeWPay) || 0;
+        } else if (particulars.includes('undertime') || particulars.includes('tardy')) {
+          // Only count undertime/tardy for SL if not VL
+          slAbsent += parseFloat(record.slAbsentUndertimeWPay) || 0;
+        }
       });
 
       // Balance = Earned - Absent
@@ -216,9 +589,15 @@ function StaffLeaveRecordDetail() {
       return;
     }
 
-    if (!formData.period || !formData.particulars) {
-      setAddError('Period and Particulars are required');
-      console.error('[handleAddRecord] Missing required fields');
+    if (!formData.particulars) {
+      setAddError('Particulars are required');
+      console.error('[handleAddRecord] Missing particulars');
+      return;
+    }
+
+    // Validate date ranges
+    if (!newRecordDateRanges.length || !newRecordDateRanges.every(r => r.from && r.to)) {
+      setAddError('All date ranges must have both from and to dates.');
       return;
     }
 
@@ -227,54 +606,27 @@ function StaffLeaveRecordDetail() {
     console.log('[handleAddRecord] Using actualStaffId:', actualStaffId);
 
     try {
-      if (editingRecordId) {
-        // Update existing record via API
-        const updatingRecord = leaveRecords.find(r => r.recordId === editingRecordId || r.id === editingRecordId);
-        if (!updatingRecord) {
-          setAddError('Record not found');
-          return;
-        }
+      // Add new record via API
+      const response = await leaveRecordAPI.create({
+        staffId: actualStaffId,
+        staffName: staff?.name || 'N/A',
+        dateRanges: newRecordDateRanges,
+        period: '', // legacy, not used
+        particulars: formData.particulars,
+        vlEarned: parseFloat(formData.vlEarned) || 0,
+        vlAbsentUndertimeWPay: parseFloat(formData.vlAbsentUndertimeWPay) || 0,
+        slEarned: parseFloat(formData.slEarned) || 0,
+        slAbsentUndertimeWPay: parseFloat(formData.slAbsentUndertimeWPay) || 0,
+        cto: formData.cto || '',
+      });
+      console.log('[handleAddRecord] Leave record created:', response.data);
 
-        const recordId = updatingRecord.recordId || `LR-${editingRecordId}`;
-        console.log('[handleAddRecord] Updating record:', recordId);
-        await leaveRecordAPI.update(recordId, {
-          period: formData.period,
-          particulars: formData.particulars,
-          vlEarned: parseFloat(formData.vlEarned) || 0,
-          vlAbsentUndertimeWPay: parseFloat(formData.vlAbsentUndertimeWPay) || 0,
-          slEarned: parseFloat(formData.slEarned) || 0,
-          slAbsentUndertimeWPay: parseFloat(formData.slAbsentUndertimeWPay) || 0,
-          cto: formData.cto || '',
-        });
+      // Refresh from API to get the complete record with all fields
+      console.log('[handleAddRecord] Fetching fresh data from API...');
+      await fetchData();
+      console.log('[handleAddRecord] API fetch completed');
 
-        // Refresh records and wait for completion
-        console.log('Refreshing leave records after update...');
-        await fetchData();
-        alert('Leave record updated successfully');
-      } else {
-        // Add new record via API
-        console.log('[handleAddRecord] Creating new record for staffId:', actualStaffId);
-        console.log('[handleAddRecord] Form data:', formData);
-        const response = await leaveRecordAPI.create({
-          staffId: actualStaffId,
-          staffName: staff?.name || 'N/A',
-          period: formData.period,
-          particulars: formData.particulars,
-          vlEarned: parseFloat(formData.vlEarned) || 0,
-          vlAbsentUndertimeWPay: parseFloat(formData.vlAbsentUndertimeWPay) || 0,
-          slEarned: parseFloat(formData.slEarned) || 0,
-          slAbsentUndertimeWPay: parseFloat(formData.slAbsentUndertimeWPay) || 0,
-          cto: formData.cto || '',
-        });
-        console.log('[handleAddRecord] Leave record created:', response.data);
-
-        // Refresh from API to get the complete record with all fields
-        console.log('[handleAddRecord] Fetching fresh data from API...');
-        await fetchData();
-        console.log('[handleAddRecord] API fetch completed');
-
-        alert('Leave record added successfully');
-      }
+      showSuccessMessage('Leave record added successfully');
 
       setShowAddForm(false);
       setEditingRecordId(null);
@@ -282,11 +634,12 @@ function StaffLeaveRecordDetail() {
         period: '',
         particulars: '',
         vlEarned: '0',
-        vlAbsentUndertimeWPay: '',
+        vlAbsentUndertimeWPay: '0',
         slEarned: '0',
-        slAbsentUndertimeWPay: '',
+        slAbsentUndertimeWPay: '0',
         cto: '',
       });
+      setNewRecordDateRanges([{ from: '', to: '' }]);
     } catch (err) {
       console.error('Error saving record:', err);
       const errorMsg = err.response?.data?.message || 'Failed to save leave record. Please try again.';
@@ -316,7 +669,7 @@ function StaffLeaveRecordDetail() {
 
         // Refresh records
         await fetchData();
-        alert('Leave record deleted successfully');
+        showSuccessMessage('Leave record deleted successfully');
       } catch (err) {
         console.error('Error deleting record:', err);
         const errorMessage = err.response?.data?.message || 'Failed to delete leave record. Please try again.';
@@ -326,12 +679,9 @@ function StaffLeaveRecordDetail() {
   };
 
   const handleEditLeave = (record) => {
-    // Format the date string for input (YYYY-MM-DD)
-    const periodDate = record.period ? new Date(record.period).toISOString().split('T')[0] : '';
-    
     // Set form data for edit modal
     setEditRecordData({
-      period: periodDate,
+      period: '', // legacy, not used
       particulars: record.particulars,
       vlEarned: record.vlEarned.toString(),
       vlAbsentUndertimeWPay: record.vlAbsentUndertimeWPay.toString(),
@@ -339,6 +689,12 @@ function StaffLeaveRecordDetail() {
       slAbsentUndertimeWPay: record.slAbsentUndertimeWPay.toString(),
       cto: record.cto || '',
     });
+    setEditRecordDateRanges(record.dateRanges && Array.isArray(record.dateRanges) && record.dateRanges.length > 0
+      ? record.dateRanges.map(r => ({ 
+          from: formatDateForInput(r.from), 
+          to: formatDateForInput(r.to) 
+        }))
+      : [{ from: '', to: '' }]);
     setEditingRecordId(record.recordId || record.id);
     setShowEditModal(true);
   };
@@ -352,24 +708,27 @@ function StaffLeaveRecordDetail() {
   };
 
   const handleSaveNewRecord = async () => {
-    if (!newRecordData.period || !newRecordData.particulars) {
-      alert('Period and Particulars are required');
+    if (!newRecordDateRanges.length || !newRecordDateRanges.every(r => r.from && r.to)) {
+      alert('All date ranges must have both from and to dates.');
+      return;
+    }
+    if (!newRecordData.particulars) {
+      alert('Particulars are required');
       return;
     }
 
     try {
       console.log('[handleSaveNewRecord] Using actualStaffId:', actualStaffId);
       console.log('[handleSaveNewRecord] Staff data:', staff);
-      
       if (!actualStaffId) {
         alert('Staff ID not found. Please reload the page.');
         return;
       }
-
       await leaveRecordAPI.create({
         staffId: actualStaffId,
         staffName: staff?.name || 'N/A',
-        period: newRecordData.period,
+        dateRanges: newRecordDateRanges,
+        period: '', // legacy, not used
         particulars: newRecordData.particulars,
         vlEarned: parseFloat(newRecordData.vlEarned) || 0,
         vlAbsentUndertimeWPay: parseFloat(newRecordData.vlAbsentUndertimeWPay) || 0,
@@ -377,11 +736,9 @@ function StaffLeaveRecordDetail() {
         slAbsentUndertimeWPay: parseFloat(newRecordData.slAbsentUndertimeWPay) || 0,
         cto: newRecordData.cto || '',
       });
-
       console.log('[handleSaveNewRecord] Record saved, calling fetchData...');
       await fetchData();
       console.log('[handleSaveNewRecord] fetchData completed');
-      
       setShowAddForm(false);
       setNewRecordData({
         period: '',
@@ -392,7 +749,8 @@ function StaffLeaveRecordDetail() {
         slAbsentUndertimeWPay: '0',
         cto: '',
       });
-      alert('Leave record added successfully');
+      setNewRecordDateRanges([{ from: '', to: '' }]);
+      showSuccessMessage('Leave record added successfully');
     } catch (err) {
       console.error('Error saving record:', err);
       alert('Failed to save leave record');
@@ -408,19 +766,22 @@ function StaffLeaveRecordDetail() {
   };
 
   const handleSaveEditRecord = async () => {
-    if (!editRecordData.period || !editRecordData.particulars) {
-      alert('Period and Particulars are required');
+    if (!editRecordData.particulars) {
+      alert('Particulars are required');
       return;
     }
-
+    if (!editRecordDateRanges.length || !editRecordDateRanges.every(r => r.from && r.to)) {
+      alert('All date ranges must have both from and to dates.');
+      return;
+    }
     try {
       if (!editingRecordId) {
         alert('Record ID not found');
         return;
       }
-
       await leaveRecordAPI.update(editingRecordId, {
-        period: editRecordData.period,
+        dateRanges: editRecordDateRanges,
+        period: '', // legacy, not used
         particulars: editRecordData.particulars,
         vlEarned: parseFloat(editRecordData.vlEarned) || 0,
         vlAbsentUndertimeWPay: parseFloat(editRecordData.vlAbsentUndertimeWPay) || 0,
@@ -428,9 +789,7 @@ function StaffLeaveRecordDetail() {
         slAbsentUndertimeWPay: parseFloat(editRecordData.slAbsentUndertimeWPay) || 0,
         cto: editRecordData.cto || '',
       });
-
       await fetchData();
-      
       setShowEditModal(false);
       setEditingRecordId(null);
       setEditRecordData({
@@ -442,7 +801,7 @@ function StaffLeaveRecordDetail() {
         slAbsentUndertimeWPay: '0',
         cto: '',
       });
-      alert('Leave record updated successfully');
+      showSuccessMessage('Leave record updated successfully');
     } catch (err) {
       console.error('Error updating record:', err);
       const errorMessage = err.response?.data?.message || 'Failed to update leave record';
@@ -463,18 +822,193 @@ function StaffLeaveRecordDetail() {
     });
   };
 
+  // CSV Export handler
+  const handleExportCsv = () => {
+    if (!leaveRecords.length) return;
+    let vlCumulativeBalance = 0;
+    let slCumulativeBalance = 0;
+
+    const filtered = leaveRecords.map(r => {
+      const obj = {};
+      const particulars = String(r.particulars || '').toLowerCase();
+
+      if (
+        particulars.includes('vacation leave') ||
+        particulars === 'vl' ||
+        particulars.includes('undertime') ||
+        particulars.includes('tardy') ||
+        particulars.includes('earned leave')
+      ) {
+        vlCumulativeBalance +=
+          (parseFloat(r.vlEarned) || 0) - (parseFloat(r.vlAbsentUndertimeWPay) || 0);
+      }
+
+      if (
+        particulars.includes('sick leave') ||
+        particulars === 'sl' ||
+        particulars.includes('undertime') ||
+        particulars.includes('tardy') ||
+        particulars.includes('earned leave')
+      ) {
+        slCumulativeBalance +=
+          (parseFloat(r.slEarned) || 0) - (parseFloat(r.slAbsentUndertimeWPay) || 0);
+      }
+
+      const { from, to } = getRecordFromTo(r);
+      obj['periodFrom'] = from === 'N/A' ? '' : from;
+      obj['periodTo'] = to === 'N/A' ? '' : to;
+      obj['particulars'] = r['particulars'] ?? '';
+      obj['vlEarned'] = r['vlEarned'] ?? '';
+      obj['vlAbsentUndertimeWPay'] = r['vlAbsentUndertimeWPay'] ?? '';
+      const vlExportBalance = Math.max(0, vlCumulativeBalance);
+      obj['vlBalance'] = vlExportBalance === 0 ? '' : vlExportBalance.toFixed(2);
+      obj['slEarned'] = r['slEarned'] ?? '';
+      obj['slAbsentUndertimeWPay'] = r['slAbsentUndertimeWPay'] ?? '';
+      const slExportBalance = Math.max(0, slCumulativeBalance);
+      obj['slBalance'] = slExportBalance === 0 ? '' : slExportBalance.toFixed(2);
+      obj['cto'] = r['cto'] ?? '';
+      return obj;
+    });
+    exportToCsv('leave_records.csv', filtered);
+  };
+  // CSV Import handler
+  const handleImportCsv = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    importFromCsv(file, async (data) => {
+      const normalizeKeys = obj => {
+        const out = {};
+        Object.keys(obj).forEach(k => {
+          out[k.trim().toLowerCase()] = obj[k];
+        });
+        return out;
+      };
+      const mapped = data.map(rowOrig => {
+        const row = normalizeKeys(rowOrig);
+        // Helper to get value from both camelCase and lowercase
+        const getVal = (row, key) => row[key] ?? row[key.toLowerCase()] ?? row[key.replace(/([A-Z])/g, l => l.toLowerCase())] ?? '';
+
+        // Accept either legacy period or split periodFrom/periodTo columns.
+        const periodFromVal = getVal(row, 'periodFrom');
+        const periodToVal = getVal(row, 'periodTo');
+        const periodVal = getVal(row, 'period') || (periodFromVal && periodToVal ? `${periodFromVal} - ${periodToVal}` : periodFromVal || periodToVal || '');
+
+        // Try to parse period fields into dateRanges if possible.
+        let dateRanges = [];
+
+        if (periodFromVal || periodToVal) {
+          const parsedFrom = periodFromVal ? new Date(periodFromVal) : null;
+          const parsedTo = periodToVal ? new Date(periodToVal) : parsedFrom;
+          if (
+            parsedFrom &&
+            parsedTo &&
+            !isNaN(parsedFrom.getTime()) &&
+            !isNaN(parsedTo.getTime())
+          ) {
+            const fromDate = parsedFrom <= parsedTo ? parsedFrom : parsedTo;
+            const toDate = parsedFrom <= parsedTo ? parsedTo : parsedFrom;
+            dateRanges = [{
+              from: formatDateForInput(fromDate),
+              to: formatDateForInput(toDate),
+            }];
+          }
+        }
+
+        if (periodVal && periodVal !== 'N/A') {
+          // Match formats like 2/3-5,10,12-13/2026 or 2/17,19/2026 or 2/15/26
+          const match = periodVal.match(/^(\d{1,2})\/([^/]+)\/(\d{2,4})$/);
+          if (match) {
+            const month = parseInt(match[1], 10);
+            const daysPart = match[2];
+            let year = parseInt(match[3], 10);
+            if (year < 100) year += 2000; // handle 2-digit years as 20xx
+            if (typeof daysPart === 'string') {
+              daysPart.split(',').forEach(part => {
+                if (part.includes('-')) {
+                  const [start, end] = part.split('-').map(Number);
+                  if (!isNaN(start) && !isNaN(end)) {
+                    dateRanges.push({
+                      from: `${year}-${String(month).padStart(2, '0')}-${String(start).padStart(2, '0')}`,
+                      to: `${year}-${String(month).padStart(2, '0')}-${String(end).padStart(2, '0')}`
+                    });
+                  }
+                } else if (!isNaN(Number(part))) {
+                  dateRanges.push({
+                    from: `${year}-${String(month).padStart(2, '0')}-${String(Number(part)).padStart(2, '0')}`,
+                    to: `${year}-${String(month).padStart(2, '0')}-${String(Number(part)).padStart(2, '0')}`
+                  });
+                }
+              });
+            }
+          }
+        }
+        // Only use these columns: period, particulars, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay
+        // If any leave field is present, fill missing leave fields with 0
+        const parseNum = v => v === undefined || v === null || v === '' ? 0 : Number(v);
+        const leaveKeys = [
+          ['vlEarned','vlearned'],
+          ['vlAbsentUndertimeWPay','vlabsentundertimewpay'],
+          ['slEarned','slearned'],
+          ['slAbsentUndertimeWPay','slabsentundertimewpay']
+        ];
+        const hasLeaveValue = leaveKeys.some(([camel, lower]) => getVal(row, camel) !== '' && getVal(row, camel) !== undefined);
+        return {
+          // Backend requires recordId, staffId, particulars, and dateRanges or period
+          // Use crypto.randomUUID for robust uniqueness
+          recordId: `LR-${crypto.randomUUID()}`,
+          staffId: staffId,
+          staffName: staffName || '',
+          dateRanges,
+          period: periodVal || '',
+          particulars: getVal(row, 'particulars') || '',
+          vlEarned: hasLeaveValue ? parseNum(getVal(row, 'vlEarned')) : 0,
+          vlAbsentUndertimeWPay: hasLeaveValue ? parseNum(getVal(row, 'vlAbsentUndertimeWPay')) : 0,
+          slEarned: hasLeaveValue ? parseNum(getVal(row, 'slEarned')) : 0,
+          slAbsentUndertimeWPay: hasLeaveValue ? parseNum(getVal(row, 'slAbsentUndertimeWPay')) : 0,
+        };
+      });
+      console.log('[handleImportCsv] mapped records:', mapped);
+      try {
+        // Send to backend batch import endpoint
+        const res = await leaveRecordAPI.importBatch(mapped);
+        setLeaveRecords(prev => [...prev, ...mapped]);
+        calculateLeaveBalance([...leaveRecords, ...mapped]);
+        setImportSuccess(true);
+      } catch (err) {
+        setError('Failed to import leave records to backend.');
+        console.error('[handleImportCsv] importBatch error:', err);
+      } finally {
+        setImporting(false);
+        setTimeout(() => setImportSuccess(false), 2000);
+      }
+    });
+  };
+
   if (loading) return <div className="text-center p-8">Loading...</div>;
+
+  if (importing) return <div className="text-center p-8 text-blue-600 font-bold">Importing records...</div>;
+  if (importSuccess) return <div className="text-center p-8 text-green-600 font-bold">Import successful!</div>;
 
   return (
     <div className="mt-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/employee-leave-record')}
-        className="flex items-center gap-2 mb-6 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition"
-      >
-        <TbArrowLeft size={20} />
-        Back
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Leave Record</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportCsv}
+            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
+            title="Export CSV"
+          >
+            Export CSV
+          </button>
+          <label className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition cursor-pointer">
+            Import CSV
+            <input type="file" accept=".csv" onChange={handleImportCsv} style={{ display: 'none' }} />
+          </label>
+        </div>
+      </div>
+
+      
 
       {/* Header */}
       <div className="mb-6">
@@ -489,35 +1023,66 @@ function StaffLeaveRecordDetail() {
       </div>
 
       {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {successMessage && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{successMessage}</div>}
 
       {/* Leave Balance Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-blue-50 p-4 rounded border border-blue-200">
           <p className="text-sm text-gray-600 mb-1">Vacation Leave Balance</p>
-          <p className="text-2xl font-bold text-blue-600">{leaveBalance.vacationLeaveBalance.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-blue-600">{typeof leaveBalance.vacationLeaveBalance === 'number' && !isNaN(leaveBalance.vacationLeaveBalance) ? leaveBalance.vacationLeaveBalance.toFixed(2) : ''}</p>
         </div>
         <div className="bg-green-50 p-4 rounded border border-green-200">
           <p className="text-sm text-gray-600 mb-1">Sick Leave Balance</p>
-          <p className="text-2xl font-bold text-green-600">{leaveBalance.sickLeaveBalance.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600">{typeof leaveBalance.sickLeaveBalance === 'number' && !isNaN(leaveBalance.sickLeaveBalance) ? leaveBalance.sickLeaveBalance.toFixed(2) : ''}</p>
         </div>
         <div className="bg-purple-50 p-4 rounded border border-purple-200">
           <p className="text-sm text-gray-600 mb-1">Total Days Used</p>
-          <p className="text-2xl font-bold text-purple-600">{(leaveBalance.vacationLeaveAbsent + leaveBalance.sickLeaveAbsent).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-purple-600">{typeof leaveBalance.vacationLeaveAbsent === 'number' && typeof leaveBalance.sickLeaveAbsent === 'number' && !isNaN(leaveBalance.vacationLeaveAbsent + leaveBalance.sickLeaveAbsent) ? (leaveBalance.vacationLeaveAbsent + leaveBalance.sickLeaveAbsent).toFixed(2) : ''}</p>
+        </div>
+      </div>
+
+      <div className="mb-6 border-b border-gray-300">
+        <div className="flex gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('records')}
+            className={`pb-2 font-semibold border-b-2 transition ${
+              activeTab === 'records'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Leave Records
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('summary')}
+            className={`pb-2 font-semibold border-b-2 transition ${
+              activeTab === 'summary'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Leave Summary
+          </button>
         </div>
       </div>
 
       {/* Leave Records Table Section */}
+      {activeTab === 'records' && (
       <div className="mb-6">
         <div className="bg-white rounded shadow overflow-x-auto">
           <table className="w-full">
             <thead className="bg-blue-100 border-b">
               <tr>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Period</th>
+                <th className="px-6 py-3 text-left font-bold text-gray-700">Period From</th>
+                <th className="px-6 py-3 text-left font-bold text-gray-700">Period To</th>
                 <th className="px-6 py-3 text-left font-bold text-gray-700">Particulars</th>
+                <th className="px-6 py-3 text-center font-bold text-gray-700">No. of Days</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">VL Earned</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">VL ABSENT W/PAY</th>
+                <th className="px-6 py-3 text-center font-bold text-gray-700">VL ABSENT/UNDERTIME/ WITH PAY</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">SL Earned</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT W/PAY</th>
+                <th className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT/UNDERTIME/ WITH PAY</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">CTO</th>
                 {user && isAdmin(user.role) && (
                   <th className="px-6 py-3 text-center font-bold text-gray-700">Actions</th>
@@ -527,20 +1092,28 @@ function StaffLeaveRecordDetail() {
             <tbody>
               {leaveRecords.length === 0 && !showAddForm && (
                 <tr>
-                  <td colSpan={user && isAdmin(user.role) ? 8 : 7} className="px-6 py-4 text-center text-gray-600">
+                  <td colSpan={user && isAdmin(user.role) ? 10 : 9} className="px-6 py-4 text-center text-gray-600">
                     No leave records found
                   </td>
                 </tr>
               )}
               {leaveRecords.map((record) => (
-                <tr key={record.id} className="border-b hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 text-gray-800">{new Date(record.period).toLocaleDateString()}</td>
+                <tr key={record.recordId || record.id} className="border-b hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 text-gray-800">{getRecordFromTo(record).from}</td>
+                  <td className="px-6 py-4 text-gray-800">{getRecordFromTo(record).to}</td>
                   <td className="px-6 py-4 text-gray-800">{record.particulars}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{record.vlEarned.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{record.vlAbsentUndertimeWPay.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{record.slEarned.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{record.slAbsentUndertimeWPay.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{record.cto ? parseFloat(record.cto).toFixed(2) : ''}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.numberOfDays === 'number' && !isNaN(record.numberOfDays) ? record.numberOfDays.toFixed(2) : (record.numberOfDays ? Number(record.numberOfDays).toFixed(2) : '')}</td>
+                  {/* Late Filing Explanation for leave records, if present */}
+                  {record.lateFilingExplanation && (
+                    <td className="px-6 py-4 text-red-600 font-semibold whitespace-pre-line" colSpan={user && isAdmin(user.role) ? 6 : 5}>
+                      Explanation for Late Filing: {record.lateFilingExplanation}
+                    </td>
+                  )}
+                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.vlEarned === 'number' && !isNaN(record.vlEarned) ? record.vlEarned.toFixed(2) : (record.vlEarned ? Number(record.vlEarned).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.vlAbsentUndertimeWPay === 'number' && !isNaN(record.vlAbsentUndertimeWPay) ? record.vlAbsentUndertimeWPay.toFixed(2) : (record.vlAbsentUndertimeWPay ? Number(record.vlAbsentUndertimeWPay).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.slEarned === 'number' && !isNaN(record.slEarned) ? record.slEarned.toFixed(2) : (record.slEarned ? Number(record.slEarned).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.slAbsentUndertimeWPay === 'number' && !isNaN(record.slAbsentUndertimeWPay) ? record.slAbsentUndertimeWPay.toFixed(2) : (record.slAbsentUndertimeWPay ? Number(record.slAbsentUndertimeWPay).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{record.cto ? (isNaN(Number(record.cto)) ? '' : Number(record.cto).toFixed(2)) : ''}</td>
                   {user && isAdmin(user.role) && (
                     <td className="px-6 py-4 text-center flex gap-2 justify-center">
                       <button
@@ -551,7 +1124,7 @@ function StaffLeaveRecordDetail() {
                         <TbEdit size={18} />
                       </button>
                       <button
-                        onClick={() => handleDeleteLeave(record.id)}
+                        onClick={() => handleDeleteLeave(record.recordId || record.id)}
                         className="p-2 text-red-600 hover:bg-red-100 rounded transition"
                         title="Delete"
                       >
@@ -563,15 +1136,29 @@ function StaffLeaveRecordDetail() {
               ))}
               {showAddForm && user && isAdmin(user.role) && (
                 <tr className="border-b bg-blue-50">
-                  <td className="px-6 py-2">
-                    <input
-                      type="date"
-                      name="period"
-                      value={newRecordData.period}
-                      onChange={handleNewRecordChange}
-                      className="w-full px-2 py-1 border rounded text-sm"
-                      required
-                    />
+                  <td className="px-6 py-2" colSpan="2">
+                    {/* Multiple date range input */}
+                    <div className="flex items-center gap-1 mb-1">
+                      <input
+                        type="date"
+                        value={newRecordDateRanges[0]?.from || ''}
+                        onChange={e => {
+                          setNewRecordDateRanges([{ from: e.target.value, to: newRecordDateRanges[0]?.to || '' }]);
+                        }}
+                        className="px-1 py-1 border rounded text-sm"
+                        required
+                      />
+                      <span className="mx-1">to</span>
+                      <input
+                        type="date"
+                        value={newRecordDateRanges[0]?.to || ''}
+                        onChange={e => {
+                          setNewRecordDateRanges([{ from: newRecordDateRanges[0]?.from || '', to: e.target.value }]);
+                        }}
+                        className="px-1 py-1 border rounded text-sm"
+                        required
+                      />
+                    </div>
                   </td>
                   <td className="px-6 py-2">
                     <select
@@ -582,22 +1169,30 @@ function StaffLeaveRecordDetail() {
                       required
                     >
                       <option value="">Select</option>
-                      <option value="EL">EL</option>
-                      <option value="SL">SL</option>
-                      <option value="FL">FL</option>
-                      <option value="SPL">SPL</option>
+                      {particularsOptions.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
                     </select>
                   </td>
+                  {/* No. of Days column (disabled input) */}
                   <td className="px-6 py-2">
-                    <select
+                    <input
+                      type="number"
+                      value={typeof newRecordData.numberOfDays === 'number' && !isNaN(newRecordData.numberOfDays) ? newRecordData.numberOfDays.toFixed(2) : (newRecordData.numberOfDays ? Number(newRecordData.numberOfDays).toFixed(2) : '0.00')}
+                      disabled
+                      className="w-full px-2 py-1 border rounded text-sm text-center bg-gray-100 cursor-not-allowed"
+                    />
+                  </td>
+                  <td className="px-6 py-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
                       name="vlEarned"
                       value={newRecordData.vlEarned}
                       onChange={handleNewRecordChange}
                       className="w-full px-2 py-1 border rounded text-sm text-center"
-                    >
-                      <option value="0">0</option>
-                      <option value="1.25">1.25</option>
-                    </select>
+                    />
                   </td>
                   <td className="px-6 py-2">
                     <input
@@ -610,15 +1205,15 @@ function StaffLeaveRecordDetail() {
                     />
                   </td>
                   <td className="px-6 py-2">
-                    <select
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
                       name="slEarned"
                       value={newRecordData.slEarned}
                       onChange={handleNewRecordChange}
                       className="w-full px-2 py-1 border rounded text-sm text-center"
-                    >
-                      <option value="0">0</option>
-                      <option value="1.25">1.25</option>
-                    </select>
+                    />
                   </td>
                   <td className="px-6 py-2">
                     <input
@@ -671,96 +1266,162 @@ function StaffLeaveRecordDetail() {
         </button>
       )}
       </div>
+      )}
 
       {/* Leave Record Summary Table (Reference from image) */}
-      <div className="mt-8">
-        <h2 className="text-xl font-bold mb-4">Leave Summary</h2>
-        <div className="bg-white rounded shadow overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-200 border">
-                <th rowSpan="2" className="px-4 py-2 border text-left font-bold">PERIOD</th>
-                <th rowSpan="2" className="px-4 py-2 border text-left font-bold">PARTICULARS</th>
-                <th colSpan="3" className="px-4 py-2 border text-center font-bold">VACATION LEAVE</th>
-                <th colSpan="3" className="px-4 py-2 border text-center font-bold">SICK LEAVE</th>
-              </tr>
-              <tr className="bg-gray-200 border">
-                <th className="px-4 py-2 border text-center font-bold">EARNED</th>
-                <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
-                <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
-                <th className="px-4 py-2 border text-center font-bold">EARNED</th>
-                <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
-                <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaveRecords.length === 0 ? (
-                <tr className="border">
-                  <td colSpan="8" className="px-4 py-2 border text-center text-gray-600">
-                    No leave records to display
-                  </td>
+      {activeTab === 'summary' && (
+        <div className="mt-2">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-xl font-bold">Leave Summary</h2>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button
+                  onClick={() => setShowConverter(prev => !prev)}
+                  className="px-3 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition font-semibold print:hidden"
+                >
+                  Converter ({conversionUnit})
+                </button>
+                {showConverter && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white border rounded shadow z-50">
+                    <button onClick={() => { setConversionUnit('days'); setShowConverter(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-100">Days</button>
+                    <button onClick={() => { setConversionUnit('months'); setShowConverter(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-100">Months</button>
+                    <button onClick={() => { setConversionUnit('weeks'); setShowConverter(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-100">Weeks</button>
+                    <button onClick={() => { setConversionUnit('minutes'); setShowConverter(false); }} className="w-full text-left px-3 py-2 hover:bg-gray-100">Minutes</button>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handlePrintSummary}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-semibold print:hidden"
+              >
+                Print
+              </button>
+            </div>
+          </div>
+          <div ref={summaryRef} className="bg-white rounded shadow overflow-x-auto">
+            <table className="w-full border-collapse print-table">
+              <thead>
+                <tr className="bg-gray-200 border">
+                  <th colSpan="2" className="px-4 py-2 border text-center font-bold">PERIOD</th>
+                  <th rowSpan="2" className="px-4 py-2 border text-left font-bold">PARTICULARS</th>
+                  <th colSpan="3" className="px-4 py-2 border text-center font-bold">VACATION LEAVE</th>
+                  <th colSpan="3" className="px-4 py-2 border text-center font-bold">SICK LEAVE</th>
                 </tr>
-              ) : (
-                <>
-                  {leaveRecords.map((record, index) => {
-                    // Calculate cumulative balance
-                    // Balance = Previous Balance + Earned - Absent
-                    let vlCumulativeBalance = 0;
-                    let slCumulativeBalance = 0;
-
-                    // Sum up all records up to and including current one
-                    for (let i = 0; i <= index; i++) {
-                      vlCumulativeBalance += leaveRecords[i].vlEarned - leaveRecords[i].vlAbsentUndertimeWPay;
-                      slCumulativeBalance += leaveRecords[i].slEarned - leaveRecords[i].slAbsentUndertimeWPay;
-                    }
-
-                    return (
-                      <tr key={record.id} className="border">
-                        <td className="px-4 py-2 border">{new Date(record.period).toLocaleDateString()}</td>
-                        <td className="px-4 py-2 border">{record.particulars}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{record.vlEarned === 0 ? '' : record.vlEarned.toFixed(2)}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{record.vlAbsentUndertimeWPay === 0 ? '' : record.vlAbsentUndertimeWPay.toFixed(2)}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{vlCumulativeBalance === 0 ? '' : Math.max(0, vlCumulativeBalance).toFixed(2)}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{record.slEarned === 0 ? '' : record.slEarned.toFixed(2)}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{record.slAbsentUndertimeWPay === 0 ? '' : record.slAbsentUndertimeWPay.toFixed(2)}</td>
-                        <td className="px-4 py-2 border text-center font-semibold">{slCumulativeBalance === 0 ? '' : Math.max(0, slCumulativeBalance).toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                  {/* Total Row */}
-                  <tr className="border bg-gray-100 font-bold">
-                    <td colSpan="2" className="px-4 py-2 border text-right">TOTAL:</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.vacationLeaveEarned === 0 ? '' : leaveBalance.vacationLeaveEarned.toFixed(2)}</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.vacationLeaveAbsent === 0 ? '' : leaveBalance.vacationLeaveAbsent.toFixed(2)}</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.vacationLeaveBalance === 0 ? '' : leaveBalance.vacationLeaveBalance.toFixed(2)}</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.sickLeaveEarned === 0 ? '' : leaveBalance.sickLeaveEarned.toFixed(2)}</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.sickLeaveAbsent === 0 ? '' : leaveBalance.sickLeaveAbsent.toFixed(2)}</td>
-                    <td className="px-4 py-2 border text-center">{leaveBalance.sickLeaveBalance === 0 ? '' : leaveBalance.sickLeaveBalance.toFixed(2)}</td>
+                <tr className="bg-gray-200 border">
+                  <th className="px-4 py-2 border text-center font-bold">FROM</th>
+                  <th className="px-4 py-2 border text-center font-bold">TO</th>
+                  <th className="px-4 py-2 border text-center font-bold">EARNED</th>
+                  <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
+                  <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
+                  <th className="px-4 py-2 border text-center font-bold">EARNED</th>
+                  <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
+                  <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaveRecords.length === 0 ? (
+                  <tr className="border">
+                    <td colSpan="9" className="px-4 py-2 border text-center text-gray-600">
+                      No leave records to display
+                    </td>
                   </tr>
-                </>
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  <>
+                    {leaveRecords.map((record, index) => {
+                      let vlCumulativeBalance = 0;
+                      let slCumulativeBalance = 0;
+                      for (let i = 0; i <= index; i++) {
+                        const rec = leaveRecords[i];
+                        const particulars = String(rec.particulars || '').toLowerCase();
+                        if (
+                          particulars.includes('vacation leave') ||
+                          particulars === 'vl' ||
+                          particulars.includes('undertime') ||
+                          particulars.includes('tardy') ||
+                          particulars.includes('earned leave')
+                        ) {
+                          vlCumulativeBalance += (parseFloat(rec.vlEarned) || 0) - (parseFloat(rec.vlAbsentUndertimeWPay) || 0);
+                        }
+                        if (
+                          particulars.includes('sick leave') ||
+                          particulars === 'sl' ||
+                          particulars.includes('undertime') ||
+                          particulars.includes('tardy') ||
+                          particulars.includes('earned leave')
+                        ) {
+                          slCumulativeBalance += (parseFloat(rec.slEarned) || 0) - (parseFloat(rec.slAbsentUndertimeWPay) || 0);
+                        }
+                      }
+
+                      return (
+                        <tr key={record.recordId || record.id || index} className="border">
+                          <td className="px-4 py-2 border">{getRecordFromTo(record).from}</td>
+                          <td className="px-4 py-2 border">{getRecordFromTo(record).to}</td>
+                          <td className="px-4 py-2 border">{record.particulars}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(record.vlEarned)) || Number(record.vlEarned) === 0 ? '' : formatConverted(Number(record.vlEarned), conversionUnit)}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isUndertimeParticulars(record.particulars)
+                            ? formatUndertimeMinutes(record.vlAbsentUndertimeWPay)
+                            : (isNaN(Number(record.vlAbsentUndertimeWPay)) || Number(record.vlAbsentUndertimeWPay) === 0
+                              ? ''
+                              : formatConverted(Number(record.vlAbsentUndertimeWPay), conversionUnit))}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(vlCumulativeBalance)) || Number(vlCumulativeBalance) === 0 ? '' : formatConverted(Math.max(0, Number(vlCumulativeBalance)), conversionUnit)}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(record.slEarned)) || Number(record.slEarned) === 0 ? '' : formatConverted(Number(record.slEarned), conversionUnit)}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isUndertimeParticulars(record.particulars)
+                            ? formatUndertimeMinutes(record.slAbsentUndertimeWPay)
+                            : (isNaN(Number(record.slAbsentUndertimeWPay)) || Number(record.slAbsentUndertimeWPay) === 0
+                              ? ''
+                              : formatConverted(Number(record.slAbsentUndertimeWPay), conversionUnit))}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(slCumulativeBalance)) || Number(slCumulativeBalance) === 0 ? '' : formatConverted(Math.max(0, Number(slCumulativeBalance)), conversionUnit)}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* Total Row */}
+                    <tr className="border bg-gray-100 font-bold">
+                      <td colSpan="3" className="px-4 py-2 border text-right">TOTAL:</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveEarned === 'number' && !isNaN(leaveBalance.vacationLeaveEarned) && leaveBalance.vacationLeaveEarned !== 0 ? formatConverted(leaveBalance.vacationLeaveEarned, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveAbsent === 'number' && !isNaN(leaveBalance.vacationLeaveAbsent) && leaveBalance.vacationLeaveAbsent !== 0 ? formatConverted(leaveBalance.vacationLeaveAbsent, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveBalance === 'number' && !isNaN(leaveBalance.vacationLeaveBalance) && leaveBalance.vacationLeaveBalance !== 0 ? formatConverted(leaveBalance.vacationLeaveBalance, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveEarned === 'number' && !isNaN(leaveBalance.sickLeaveEarned) && leaveBalance.sickLeaveEarned !== 0 ? formatConverted(leaveBalance.sickLeaveEarned, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveAbsent === 'number' && !isNaN(leaveBalance.sickLeaveAbsent) && leaveBalance.sickLeaveAbsent !== 0 ? formatConverted(leaveBalance.sickLeaveAbsent, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveBalance === 'number' && !isNaN(leaveBalance.sickLeaveBalance) && leaveBalance.sickLeaveBalance !== 0 ? formatConverted(leaveBalance.sickLeaveBalance, conversionUnit) : ''}</td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Edit Leave Record Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-h-96 overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Edit Leave Record</h2>
-            
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-1">Period</label>
-                <input
-                  type="date"
-                  name="period"
-                  value={editRecordData.period}
-                  onChange={handleEditRecordChange}
-                  className="w-full px-3 py-2 border rounded"
-                  required
-                />
+                <label className="block text-sm font-semibold mb-1">Period (from, to)</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="date"
+                    value={editRecordDateRanges[0]?.from || ''}
+                    onChange={e => {
+                      setEditRecordDateRanges([{ from: e.target.value, to: editRecordDateRanges[0]?.to || '' }]);
+                    }}
+                    className="px-2 py-1 border rounded text-sm flex-1"
+                    required
+                  />
+                  <span className="mx-1">to</span>
+                  <input
+                    type="date"
+                    value={editRecordDateRanges[0]?.to || ''}
+                    onChange={e => {
+                      setEditRecordDateRanges([{ from: editRecordDateRanges[0]?.from || '', to: e.target.value }]);
+                    }}
+                    className="px-2 py-1 border rounded text-sm flex-1"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -773,28 +1434,27 @@ function StaffLeaveRecordDetail() {
                   required
                 >
                   <option value="">Select</option>
-                  <option value="EL">EL</option>
-                  <option value="SL">SL</option>
-                  <option value="FL">FL</option>
-                  <option value="SPL">SPL</option>
+                  {particularsOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold mb-1">VL Earned</label>
-                <select
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
                   name="vlEarned"
                   value={editRecordData.vlEarned}
                   onChange={handleEditRecordChange}
                   className="w-full px-3 py-2 border rounded"
-                >
-                  <option value="0">0</option>
-                  <option value="1.25">1.25</option>
-                </select>
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">VL Absent W/PAY</label>
+                <label className="block text-sm font-semibold mb-1">VL ABSENT/UNDERTIME/ WITH PAY</label>
                 <input
                   type="number"
                   step="0.01"
@@ -807,15 +1467,15 @@ function StaffLeaveRecordDetail() {
 
               <div>
                 <label className="block text-sm font-semibold mb-1">SL Earned</label>
-                <select
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
                   name="slEarned"
                   value={editRecordData.slEarned}
                   onChange={handleEditRecordChange}
                   className="w-full px-3 py-2 border rounded"
-                >
-                  <option value="0">0</option>
-                  <option value="1.25">1.25</option>
-                </select>
+                />
               </div>
 
               <div>
@@ -860,6 +1520,7 @@ function StaffLeaveRecordDetail() {
           </div>
         </div>
       )}
+      
     </div>
   );
 }

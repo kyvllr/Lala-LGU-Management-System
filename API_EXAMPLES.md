@@ -98,9 +98,9 @@ curl -X PATCH http://localhost:5001/leaves/LV001/approve \
   }'
 ```
 
-### 8. Reject Leave Request
+### 8. Disapprove Leave Request
 ```bash
-curl -X PATCH http://localhost:5001/leaves/LV002/reject \
+curl -X PATCH http://localhost:5001/leaves/LV002/disapprove \
   -H "Content-Type: application/json" \
   -d '{
     "approvedBy": "Admin Officer",
@@ -197,9 +197,9 @@ curl -X PATCH http://localhost:5001/travel-orders/TO001/approve \
   }'
 ```
 
-### 9. Reject Travel Order
+### 9. Disapprove Travel Order
 ```bash
-curl -X PATCH http://localhost:5001/travel-orders/TO002/reject \
+curl -X PATCH http://localhost:5001/travel-orders/TO002/disapprove \
   -H "Content-Type: application/json" \
   -d '{
     "approvedBy": "Budget Officer",
@@ -311,7 +311,7 @@ Save as `test.js` and run with `node test.js`:
 const http = require('http');
 
 function makeRequest(method, path, data) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, disapprove) => {
     const options = {
       hostname: 'localhost',
       port: 5001,
@@ -330,7 +330,7 @@ function makeRequest(method, path, data) {
       });
     });
 
-    req.on('error', reject);
+    req.on('error', disapprove);
     if (data) req.write(JSON.stringify(data));
     req.end();
   });
@@ -377,4 +377,4 @@ runTests();
 - All timestamps are in ISO 8601 format
 - Dates should be formatted as `YYYY-MM-DD`
 - Staff ID must exist before filing leave or travel requests
-- Leave and travel orders cannot be modified after approval or rejection
+- Leave and travel orders cannot be modified after approval or disapproval

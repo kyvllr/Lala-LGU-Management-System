@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { staffAPI, systemAPI } from '../api';
+import { ROLES, normalizeRole } from '../constants';
 
 function StaffList() {
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isHeadOfficerUser = normalizeRole(currentUser?.role) === ROLES.HEAD_OFFICER;
   const [staffs, setStaffs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,6 +81,34 @@ function StaffList() {
     }
   };
 
+  const toggleAccountStatus = async (staff) => {
+    const nextIsActive = staff.isActive === false;
+    const actionLabel = nextIsActive ? 'activate' : 'deactivate';
+
+    if (currentUser?.staffId === staff.id && !nextIsActive) {
+      setError('You cannot deactivate your own account');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to ${actionLabel} ${staff.name}'s account?`)) {
+      return;
+    }
+
+    try {
+      await staffAPI.updateAccountStatus(staff.id, nextIsActive);
+      setStaffs((prevStaffs) =>
+        prevStaffs.map((existingStaff) =>
+          existingStaff.id === staff.id
+            ? { ...existingStaff, isActive: nextIsActive }
+            : existingStaff
+        )
+      );
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.message || `Failed to ${actionLabel} account`);
+    }
+  };
+
   const openEditModal = (staff) => {
     // Split name into components
     const nameParts = (staff.name || '').trim().split(' ');
@@ -130,14 +161,17 @@ function StaffList() {
   };
 
   const handleAddStaff = async () => {
-    if (!addFormData.id || !addFormData.firstName || !addFormData.lastName || !addFormData.email || !addFormData.password || !addFormData.role) {
+    const targetRole = isHeadOfficerUser ? ROLES.STAFF : addFormData.role;
+    const targetDepartment = isHeadOfficerUser ? currentUser.department : addFormData.department;
+
+    if (!addFormData.id || !addFormData.firstName || !addFormData.lastName || !addFormData.email || !addFormData.password || !targetRole) {
       setError('ID, First Name, Last Name, Email, Password, and Role are required');
       return;
     }
 
     // Check if department is required for this role
-    const selectedRoleData = rolesAndDepartments?.roles[addFormData.role];
-    if (selectedRoleData?.requiresDepartment && !addFormData.department) {
+    const selectedRoleData = rolesAndDepartments?.roles[targetRole];
+    if (selectedRoleData?.requiresDepartment && !targetDepartment) {
       setError('Department is required for this role');
       return;
     }
@@ -149,9 +183,9 @@ function StaffList() {
         name: fullName,
         email: addFormData.email,
         password: addFormData.password,
-        role: addFormData.role,
+        role: targetRole,
         position: addFormData.position,
-        department: addFormData.department,
+        department: targetDepartment,
         phone: addFormData.phone,
         dateOfBirth: addFormData.dateOfBirth,
         placeOfBirth: addFormData.placeOfBirth,
@@ -337,6 +371,7 @@ function StaffList() {
               <th className="p-4 text-left">Date of Birth</th>
               <th className="p-4 text-left">Place of Birth</th>
               <th className="p-4 text-left">TIN #</th>
+              <th className="p-4 text-left">Account Status</th>
               <th className="p-4 text-left">Actions</th>
             </tr>
           </thead>
@@ -353,6 +388,17 @@ function StaffList() {
                 <td className="p-4">{staff.placeOfBirth || '-'}</td>
                 <td className="p-4">{staff.tinNumber || '-'}</td>
                 <td className="p-4">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      staff.isActive === false
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    {staff.isActive === false ? 'Inactive' : 'Active'}
+                  </span>
+                </td>
+                <td className="p-4">
                   <div className="flex gap-2">
                     <button
                       onClick={() => openEditModal(staff)}
@@ -362,6 +408,25 @@ function StaffList() {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
+                    </button>
+                    <button
+                      onClick={() => toggleAccountStatus(staff)}
+                      className={`p-2 rounded transition ${
+                        staff.isActive === false
+                          ? 'text-green-600 hover:text-green-800 hover:bg-green-50'
+                          : 'text-orange-600 hover:text-orange-800 hover:bg-orange-50'
+                      }`}
+                      title={staff.isActive === false ? 'Activate Account' : 'Deactivate Account'}
+                    >
+                      {staff.isActive === false ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-1.414-1.414L12 9.172 7.05 4.222 5.636 5.636 10.586 10.586 5.636 15.536 7.05 16.95 12 12l4.95 4.95 1.414-1.414-4.95-4.95z" />
+                        </svg>
+                      )}
                     </button>
                     <button
                       onClick={() => deleteStaff(staff.id)}
@@ -636,7 +701,9 @@ function StaffList() {
                     required
                   >
                     <option value="">Select a role</option>
-                    {Object.entries(rolesAndDepartments.roles).map(([roleKey, roleData]) => (
+                    {Object.entries(rolesAndDepartments.roles)
+                      .filter(([roleKey]) => !isHeadOfficerUser || roleKey === ROLES.STAFF)
+                      .map(([roleKey, roleData]) => (
                       <option key={roleKey} value={roleKey}>
                         {roleData.displayName}
                       </option>
@@ -666,20 +733,29 @@ function StaffList() {
               {rolesAndDepartments?.roles[addFormData.role]?.requiresDepartment && (
                 <div>
                   <label className="block font-bold mb-2">Department *</label>
-                  <select
-                    name="department"
-                    value={addFormData.department}
-                    onChange={handleAddChange}
-                    className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-                    required
-                  >
-                    <option value="">Select a department</option>
-                    {rolesAndDepartments.departments.map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
+                  {isHeadOfficerUser ? (
+                    <input
+                      type="text"
+                      value={currentUser.department || ''}
+                      className="w-full px-4 py-2 border rounded bg-gray-100 text-gray-700"
+                      readOnly
+                    />
+                  ) : (
+                    <select
+                      name="department"
+                      value={addFormData.department}
+                      onChange={handleAddChange}
+                      className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                      required
+                    >
+                      <option value="">Select a department</option>
+                      {rolesAndDepartments.departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 

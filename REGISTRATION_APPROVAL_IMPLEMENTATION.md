@@ -33,8 +33,8 @@ Implemented a staff registration approval system where new staff members must wa
 - Records `approvedAt` timestamp
 - Records `approvedBy` (admin name from JWT token)
 
-#### `PATCH /staffs/:id/reject` (Admin only)
-- Rejects a pending registration
+#### `PATCH /staffs/:id/disapprove` (Admin only)
+- Disapproves a pending registration
 - Deletes the staff account from the database
 - Requires admin confirmation (in frontend)
 
@@ -48,17 +48,17 @@ Implemented a staff registration approval system where new staff members must wa
 - Added three new staffAPI methods:
   - `getPending()` - fetch pending staff
   - `approve(id)` - approve a staff
-  - `reject(id)` - reject a staff
+  - `disapprove(id)` - disapprove a staff
 
 ### 3. New Component: ApprovePendingStaff.js
 - Admin page to manage pending staff registrations
 - Displays pending staff in a table with:
   - Staff ID, Name, Email, Position, Department
   - Registration date
-  - Approve and Reject buttons
+  - Approve and Disapprove buttons
 - Features:
-  - Auto-refresh after approval/rejection
-  - Confirmation dialog before rejecting
+  - Auto-refresh after approval/disapproval
+  - Confirmation dialog before disapproving
   - Loading and error states
 
 ### 4. Updated App.js
@@ -79,7 +79,7 @@ Implemented a staff registration approval system where new staff members must wa
 1. Navigate to "Approve Pending Staff" page in sidebar
 2. View all pending staff registrations
 3. Click "Approve" to activate the account
-4. Click "Reject" to delete the pending account
+4. Click "Disapprove" to delete the pending account
 5. Once approved, staff can login with their credentials
 
 ## Database Changes

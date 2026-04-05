@@ -5,10 +5,10 @@ A comprehensive Node.js and MongoDB-based system for managing leave requests and
 ## Features
 
 - **Staff Management**: Create and manage staff records with position and department information
-- **Leave Management**: File, track, and approve/reject leave requests with multiple leave types
+- **Leave Management**: File, track, and approve/disapprove leave requests with multiple leave types
 - **Travel Order System**: Request and manage travel orders with approval workflows
-- **Approval Workflow**: Manage pending requests with approve/reject functionality
-- **Status Tracking**: Track requests through their lifecycle (Pending → Approved/Rejected → Completed)
+- **Approval Workflow**: Manage pending requests with approve/disapprove functionality
+- **Status Tracking**: Track requests through their lifecycle (Pending → Approved/Disapproved → Completed)
 
 ## Installation
 
@@ -106,7 +106,7 @@ Content-Type: application/json
 GET /leaves
 GET /leaves?status=Pending
 GET /leaves?status=Approved
-GET /leaves?status=Rejected
+GET /leaves?status=Disapproved
 ```
 
 #### Get Staff's Leave Requests
@@ -143,9 +143,9 @@ Content-Type: application/json
 }
 ```
 
-#### Reject Leave Request
+#### Disapprove Leave Request
 ```
-PATCH /leaves/:leaveId/reject
+PATCH /leaves/:leaveId/disapprove
 Content-Type: application/json
 
 {
@@ -188,7 +188,7 @@ Content-Type: application/json
 GET /travel-orders
 GET /travel-orders?status=Pending
 GET /travel-orders?status=Approved
-GET /travel-orders?status=Rejected
+GET /travel-orders?status=Disapproved
 GET /travel-orders?status=Completed
 ```
 
@@ -227,9 +227,9 @@ Content-Type: application/json
 }
 ```
 
-#### Reject Travel Order
+#### Disapprove Travel Order
 ```
-PATCH /travel-orders/:travelOrderId/reject
+PATCH /travel-orders/:travelOrderId/disapprove
 Content-Type: application/json
 
 {
@@ -277,7 +277,7 @@ DELETE /travel-orders/:travelOrderId
   endDate: Date (required),
   numberOfDays: Number,
   reason: String (required),
-  status: String (Pending, Approved, Rejected),
+  status: String (Pending, Approved, Disapproved),
   approvedBy: String,
   approvalDate: Date,
   remarks: String,
@@ -299,7 +299,7 @@ DELETE /travel-orders/:travelOrderId
   numberOfDays: Number,
   transportMode: String (Land, Air, Sea, Mixed),
   estimatedBudget: Number,
-  status: String (Pending, Approved, Rejected, Completed),
+  status: String (Pending, Approved, Disapproved, Completed),
   approvedBy: String,
   approvalDate: Date,
   remarks: String,
@@ -335,12 +335,12 @@ DELETE /travel-orders/:travelOrderId
 
 ### Leave Request Workflow
 1. Staff files leave request → Status: `Pending`
-2. Manager reviews and approves/rejects → Status: `Approved` or `Rejected`
+2. Manager reviews and approves/disapproves → Status: `Approved` or `Disapproved`
 3. System records approval date and approver name
 
 ### Travel Order Workflow
 1. Staff requests travel order → Status: `Pending`
-2. Budget Officer reviews and approves/rejects → Status: `Approved` or `Rejected`
+2. Budget Officer reviews and approves/disapproves → Status: `Approved` or `Disapproved`
 3. After travel, mark as completed → Status: `Completed`
 
 ---
@@ -360,6 +360,6 @@ The system returns appropriate HTTP status codes:
 ## Notes
 
 - Leave and travel order calculations automatically compute the number of days based on start and end dates
-- Once approved or rejected, leave/travel order details cannot be modified
+- Once approved or disapproved, leave/travel order details cannot be modified
 - Staff records must exist before filing related leave or travel requests
 - All timestamps are automatically managed by the system
