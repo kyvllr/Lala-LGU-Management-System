@@ -138,7 +138,7 @@ Response includes `token` - use this in API calls
 
 2. **File a Leave**
    - Click "File Leave"
-   - Fill form (Casual Leave, dates, reason)
+  - Fill form (Wellness, dates, reason)
    - Submit
    - Redirected to "My Leaves"
 
@@ -256,7 +256,7 @@ Body (JSON):
   "staffId": "S001",
   "staffName": "John Doe",
   "leaveId": "L001",
-  "leaveType": "Casual Leave",
+  "leaveType": "Wellness",
   "dateFrom": "2024-02-01",
   "dateTo": "2024-02-03",
   "purpose": "Family matters",

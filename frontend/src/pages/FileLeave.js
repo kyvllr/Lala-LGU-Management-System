@@ -1,6 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { leaveAPI, staffAPI } from '../api';
+import { leaveAPI, leaveRecordAPI, staffAPI } from '../api';
+import LEAVE_TYPE_OPTIONS from '../leaveTypes';
+
+const WELLNESS_ANNUAL_LIMIT = 5;
+
+const getLeaveYear = (leave) => {
+  const starts = (Array.isArray(leave?.dateRanges) ? leave.dateRanges : [])
+    .map((range) => range?.startDate || range?.from)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a - b);
+  const candidates = [starts[0], leave?.startDate, leave?.filingDate, leave?.createdAt];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const date = new Date(candidate);
+    if (!Number.isNaN(date.getTime())) return date.getFullYear();
+  }
+
+  return new Date().getFullYear();
+};
+
+const getLeaveDayCount = (leave) => {
+  const explicitDays = Number(leave?.numberOfDays);
+  if (Number.isFinite(explicitDays) && explicitDays > 0) return explicitDays;
+
+  return (Array.isArray(leave?.dateRanges) ? leave.dateRanges : []).reduce((total, range) => {
+    const start = new Date(range?.startDate || range?.from);
+    const end = new Date(range?.endDate || range?.to || range?.startDate || range?.from);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return total;
+    return total + Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  }, 0);
+};
 
 function FileLeave({ staffId }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -49,11 +82,143 @@ function FileLeave({ staffId }) {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [staffInfo, setStaffInfo] = useState({});
+  const [leaveBalances, setLeaveBalances] = useState({ vacation: 0, sick: 0, cto: 0 });
+  const [wellnessApprovedByYear, setWellnessApprovedByYear] = useState({});
+  const [wellnessBalancesLoading, setWellnessBalancesLoading] = useState(false);
+  const [wellnessBalancesError, setWellnessBalancesError] = useState('');
+  const [leaveBalancesLoading, setLeaveBalancesLoading] = useState(false);
+  const [leaveBalancesError, setLeaveBalancesError] = useState('');
 
   useEffect(() => {
     if (staffId) {
       fetchStaffName();
     }
+  }, [staffId]);
+
+  useEffect(() => {
+    if (!staffId) {
+      setLeaveBalances({ vacation: 0, sick: 0, cto: 0 });
+      setLeaveBalancesError('');
+      setWellnessApprovedByYear({});
+      setWellnessBalancesLoading(false);
+      setWellnessBalancesError('');
+      return;
+    }
+
+    let active = true;
+    const fetchLeaveBalances = async () => {
+      setLeaveBalancesLoading(true);
+      setLeaveBalancesError('');
+      try {
+        const response = await leaveRecordAPI.getByStaffId(staffId);
+        const records = Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : null;
+
+        if (!records) {
+          throw new Error('Unexpected leave-record response.');
+        }
+
+        let vacationEarned = 0;
+        let vacationUsed = 0;
+        let sickEarned = 0;
+        let sickUsed = 0;
+        let cto = 0;
+
+        records.forEach((record) => {
+          const particulars = String(record.particulars || '').toLowerCase();
+          const vacationLeaveDeduction = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+            ? Number.parseFloat(record.vlAbsentUndertimeWPay) || Number.parseFloat(record.numberOfDays) || 0
+            : Number.parseFloat(record.vlAbsentUndertimeWPay) || 0;
+          const earnedLeave = particulars.includes('earned leave');
+          const vacationRecord = particulars.includes('vacation leave')
+            || particulars === 'vl'
+            || particulars === 'mandatory/force leave'
+            || particulars === 'monetization'
+            || particulars === 'wellness'
+            || earnedLeave;
+          const sickRecord = particulars.includes('sick leave') || particulars === 'sl' || earnedLeave;
+          const tardyOrUndertime = particulars.includes('undertime') || particulars.includes('tardy');
+
+          if (vacationRecord) {
+            vacationEarned += Number.parseFloat(record.vlEarned) || 0;
+            vacationUsed += vacationLeaveDeduction;
+          } else if (tardyOrUndertime) {
+            vacationUsed += Number.parseFloat(record.vlAbsentUndertimeWPay) || 0;
+          }
+
+          if (sickRecord) {
+            sickEarned += Number.parseFloat(record.slEarned) || 0;
+            sickUsed += Number.parseFloat(record.slAbsentUndertimeWPay) || 0;
+          } else if (tardyOrUndertime) {
+            sickUsed += Number.parseFloat(record.slAbsentUndertimeWPay) || 0;
+          }
+
+          cto += Number.parseFloat(record.cto) || 0;
+        });
+
+        if (active) {
+          setLeaveBalances({
+            vacation: Math.max(0, vacationEarned - vacationUsed),
+            sick: Math.max(0, sickEarned - sickUsed),
+            cto: Math.max(0, cto),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch leave balances:', err);
+        if (active) {
+          setLeaveBalancesError(err.response?.data?.message || 'Unable to load leave balances.');
+        }
+      } finally {
+        if (active) setLeaveBalancesLoading(false);
+      }
+    };
+
+    fetchLeaveBalances();
+    return () => {
+      active = false;
+    };
+  }, [staffId]);
+
+  useEffect(() => {
+    if (!staffId) return undefined;
+
+    let active = true;
+    const fetchWellnessUsage = async () => {
+      setWellnessBalancesLoading(true);
+      setWellnessBalancesError('');
+      try {
+        const response = await leaveAPI.getByStaffId(staffId);
+        const leaves = Array.isArray(response.data) ? response.data : response.data?.data;
+        if (!Array.isArray(leaves)) {
+          throw new Error('Unexpected leave request response.');
+        }
+
+        const approvedByYear = leaves.reduce((totals, leave) => {
+          const leaveType = String(leave?.leaveType || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (leaveType !== 'wellness' || leave.status !== 'Approved') return totals;
+          const year = getLeaveYear(leave);
+          totals[year] = (totals[year] || 0) + getLeaveDayCount(leave);
+          return totals;
+        }, {});
+
+        if (active) setWellnessApprovedByYear(approvedByYear);
+      } catch (err) {
+        console.error('Failed to fetch approved Wellness Leave usage:', err);
+        if (active) {
+          setWellnessBalancesError(err.response?.data?.message || 'Unable to load Wellness Leave balance.');
+        }
+      } finally {
+        if (active) setWellnessBalancesLoading(false);
+      }
+    };
+
+    fetchWellnessUsage();
+    return () => {
+      active = false;
+    };
   }, [staffId]);
 
   useEffect(() => {
@@ -72,7 +237,7 @@ function FileLeave({ staffId }) {
   useEffect(() => {
     // Calculate total working days for all date ranges
     let totalDays = 0;
-    formData.dateRanges.forEach(range => {
+    (formData.dateRanges || []).forEach(range => {
       if (range.startDate && range.endDate) {
         const start = new Date(range.startDate + 'T00:00:00');
         const end = new Date(range.endDate + 'T00:00:00');
@@ -112,7 +277,7 @@ function FileLeave({ staffId }) {
         salary: staff.salary || '',
       }));
     } catch (err) {
-      setError('Staff ID not found');
+      setError('Item Number not found');
     }
   };
 
@@ -195,6 +360,38 @@ function FileLeave({ staffId }) {
     }));
   };
 
+  const requestedLeaveDays = Number(formData.workingDaysApplied) || 0;
+  const selectedLeaveType = formData.leaveType[0] || '';
+  const selectedLeaveYear = getLeaveYear({
+    startDate: formData.startDate,
+    dateRanges: formData.dateRanges,
+  });
+  const wellnessUsed = wellnessApprovedByYear[selectedLeaveYear] || 0;
+  const wellnessBalance = Math.max(0, WELLNESS_ANNUAL_LIMIT - wellnessUsed);
+  const isWellnessSelected = selectedLeaveType.toLowerCase() === 'wellness';
+  const deduction = (() => {
+    const type = selectedLeaveType.toLowerCase();
+    if (type === 'wellness') {
+      return { label: `Wellness Leave (${selectedLeaveYear})`, balance: wellnessBalance };
+    }
+    if (
+      type === 'vacation leave'
+      || type === 'mandatory/force leave'
+      || type === 'monetization'
+      || type === 'tardy'
+      || type === 'undertime'
+    ) {
+      return { label: 'Vacation Leave', balance: leaveBalances.vacation };
+    }
+    if (type === 'sick leave') {
+      return { label: 'Sick Leave', balance: leaveBalances.sick };
+    }
+    return null;
+  })();
+  const projectedBalance = deduction ? deduction.balance - requestedLeaveDays : null;
+  const projectedShortfall = deduction ? Math.max(0, requestedLeaveDays - deduction.balance) : 0;
+  const formatBalance = (value) => Number(value || 0).toFixed(2);
+
   const handleLeaveDetailsChange = (key, value) => {
     setFormData(prev => ({
       ...prev,
@@ -215,7 +412,7 @@ function FileLeave({ staffId }) {
     setSuccess('');
 
     if (!staffId) {
-      setError('Please enter your Staff ID in the navigation bar');
+      setError('Please enter your Item Number in the navigation bar');
       return;
     }
 
@@ -237,11 +434,119 @@ function FileLeave({ staffId }) {
         }
       }
     });
+    if (totalDays === 0 && formData.startDate && formData.endDate) {
+      const start = new Date(`${formData.startDate}T00:00:00`);
+      const end = new Date(`${formData.endDate}T00:00:00`);
+      if (start <= end) {
+        totalDays = Math.floor((end - start) / (1000 * 3600 * 24)) + 1;
+      }
+    }
 
-    // Prevent more than 5 days for force leave in a single filing
+    // Prevent more than 5 days for Force Leave in one application.
     if (formData.leaveType[0] === 'Mandatory/Force Leave' && totalDays > 5) {
-      setError('You cannot file more than 5 days for Force Leave in a single application.');
+      setError('You cannot file more than 5 days of Force Leave in one application.');
       return;
+    }
+
+    if (
+      formData.leaveType[0] === 'Wellness'
+      && wellnessBalancesLoading
+    ) {
+      setError('Please wait while your Wellness Leave balance is loading.');
+      return;
+    }
+
+    if (
+      formData.leaveType[0] === 'Wellness'
+      && !wellnessBalancesError
+      && wellnessUsed + totalDays > WELLNESS_ANNUAL_LIMIT
+    ) {
+      setError(
+        `You have ${wellnessBalance} Wellness Leave day(s) remaining in ${selectedLeaveYear}. `
+        + `The annual limit is ${WELLNESS_ANNUAL_LIMIT} approved days.`
+      );
+      return;
+    }
+
+    // Prevent filing more than 7 days of paternity leave within a year.
+    if (formData.leaveType[0] === 'Paternity Leave') {
+      const validStartDates = (formData.dateRanges || [])
+        .map((range) => range?.startDate)
+        .filter(Boolean)
+        .map((value) => new Date(`${value}T00:00:00`))
+        .filter((d) => !isNaN(d.getTime()))
+        .sort((a, b) => a - b);
+
+      const requestedYear = validStartDates.length > 0
+        ? validStartDates[0].getFullYear()
+        : new Date().getFullYear();
+
+      const leavesResponse = await leaveAPI.getByStaffId(staffId);
+      const existingLeaves = Array.isArray(leavesResponse?.data) ? leavesResponse.data : [];
+      const usedPaternityDays = existingLeaves
+        .filter((leave) => {
+          if (!leave) return false;
+          if (editingLeaveId && leave.leaveId === editingLeaveId) return false;
+
+          const normalizedType = String(leave.leaveType || '').trim();
+          const isPaternity = normalizedType === 'Paternity Leave' || normalizedType === 'Peternity Leave';
+          if (!isPaternity) return false;
+
+          const status = String(leave.status || '').trim();
+          const countedStatus = ['Pending', 'Approved', 'For Revision'].includes(status);
+          if (!countedStatus) return false;
+
+          const leaveStart = leave.startDate ? new Date(leave.startDate) : null;
+          if (!leaveStart || isNaN(leaveStart.getTime())) return false;
+
+          return leaveStart.getFullYear() === requestedYear;
+        })
+        .reduce((sum, leave) => sum + (Number(leave.numberOfDays) || 0), 0);
+
+      if (usedPaternityDays + totalDays > 7) {
+        setError(`You have already filed ${usedPaternityDays} day(s) of Paternity Leave for ${requestedYear}. Maximum allowed is 7 days per year.`);
+        return;
+      }
+    }
+
+    // Prevent filing more than 105 days of maternity leave within a year.
+    if (formData.leaveType[0] === 'Maternity Leave') {
+      const validStartDates = (formData.dateRanges || [])
+        .map((range) => range?.startDate)
+        .filter(Boolean)
+        .map((value) => new Date(`${value}T00:00:00`))
+        .filter((d) => !isNaN(d.getTime()))
+        .sort((a, b) => a - b);
+
+      const requestedYear = validStartDates.length > 0
+        ? validStartDates[0].getFullYear()
+        : new Date().getFullYear();
+
+      const leavesResponse = await leaveAPI.getByStaffId(staffId);
+      const existingLeaves = Array.isArray(leavesResponse?.data) ? leavesResponse.data : [];
+      const usedMaternityDays = existingLeaves
+        .filter((leave) => {
+          if (!leave) return false;
+          if (editingLeaveId && leave.leaveId === editingLeaveId) return false;
+
+          const normalizedType = String(leave.leaveType || '').trim();
+          if (normalizedType !== 'Maternity Leave') return false;
+
+          const status = String(leave.status || '').trim();
+          const countedStatus = ['Pending', 'Approved', 'For Revision'].includes(status);
+          if (!countedStatus) return false;
+
+          const leaveStart = leave.startDate ? new Date(leave.startDate) : null;
+          if (!leaveStart || isNaN(leaveStart.getTime())) return false;
+
+          return leaveStart.getFullYear() === requestedYear;
+        })
+        .reduce((sum, leave) => sum + (Number(leave.numberOfDays) || 0), 0);
+
+      if (usedMaternityDays + totalDays > 105) {
+        setError(`You have already filed ${usedMaternityDays} day(s) of Maternity Leave for ${requestedYear}. Maximum allowed is 105 days per year.`);
+        return;
+      }
     }
 
     // Check 5-day prior rule for all date ranges
@@ -322,16 +627,17 @@ function FileLeave({ staffId }) {
   };
 
   return (
-    <div className="mt-6 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-6">Leave Application Form</h1>
+    <div className="mt-6">
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-6">Leave Application Form</h1>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
-      {success && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{success}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
+      {success && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">{success}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded shadow space-y-6">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
+      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg border border-blue-100 shadow-sm space-y-6 xl:col-span-8">
         {/* Section 1: Personal Information */}
-        <div className="border-b pb-6">
-          <h2 className="text-xl font-bold mb-4">Personal Information</h2>
+        <div className="border-b border-blue-100 pb-6">
+          <h2 className="text-xl font-bold text-blue-950 mb-4">Personal Information</h2>
           
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
@@ -341,7 +647,7 @@ function FileLeave({ staffId }) {
                 name="lastName"
                 value={formData.lastName}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
             <div>
@@ -351,7 +657,7 @@ function FileLeave({ staffId }) {
                 name="firstName"
                 value={formData.firstName}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
             <div>
@@ -361,7 +667,7 @@ function FileLeave({ staffId }) {
                 name="middleName"
                 value={formData.middleName}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
           </div>
@@ -374,7 +680,7 @@ function FileLeave({ staffId }) {
                 name="office"
                 value={formData.office}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
             <div>
@@ -384,7 +690,7 @@ function FileLeave({ staffId }) {
                 name="position"
                 value={formData.position}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
           </div>
@@ -397,7 +703,7 @@ function FileLeave({ staffId }) {
                 name="salary"
                 value={formData.salary}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
             <div>
@@ -407,38 +713,21 @@ function FileLeave({ staffId }) {
                 name="filingDate"
                 value={formData.filingDate}
                 readOnly
-                className="w-full px-4 py-2 border rounded bg-gray-100"
+                className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60"
               />
             </div>
           </div>
         </div>
 
         {/* Section 2: Details of Application */}
-        <div className="border-b pb-6">
-          <h2 className="text-xl font-bold mb-4">Details of Application</h2>
+        <div className="border-b border-blue-100 pb-6">
+          <h2 className="text-xl font-bold text-blue-950 mb-4">Details of Application</h2>
 
           {/* A. Type of Leave to be Availed */}
           <div className="mb-6">
             <label className="block font-bold mb-3">A. Type of Leave to be Availed *</label>
-            <div className="grid grid-cols-2 gap-3 bg-gray-50 p-4 rounded">
-              {[
-                'Vacation Leave',
-                'Mandatory/Force Leave',
-                'Sick Leave',
-                'Maternity Leave',
-                'Paternity Leave',
-                'Special Privilege Leave',
-                'Solo Parent Leave',
-                'Study Leave',
-                '10-Day VAWC Leave',
-                'Rehabilitation Privilege',
-                'Special Leave Benefits for Women',
-                'Special Emergency (Calamity) Leave',
-                'Adoption Leave',
-                'Tardy',
-                'Undertime',
-                'Others'
-              ].map(type => (
+            <div className="grid grid-cols-2 gap-3 bg-blue-50/70 border border-blue-100 p-4 rounded-lg">
+              {LEAVE_TYPE_OPTIONS.map(type => (
                 <label key={type} className="flex items-center">
                   <input
                     type="radio"
@@ -457,7 +746,7 @@ function FileLeave({ staffId }) {
           {/* B. Details of Leave */}
           <div className="mb-6">
             <label className="block font-bold mb-3">B. Details of Leave</label>
-            <div className="bg-gray-50 p-4 rounded space-y-6">
+            <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-lg space-y-6">
               {/* Vacation/Special Privilege Leave */}
               <div>
                 <label className="block font-semibold mb-3">In case of vacation/special privilege leave (check box):</label>
@@ -502,7 +791,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify illness"
                       value={formData.leaveDetailsSpecific.sickInHospitalIllness || ''}
                       onChange={(e) => handleLeaveDetailsChange('sickInHospitalIllness', e.target.value)}
-                      className="ml-6 px-3 py-2 border rounded w-80"
+                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
                       disabled={!formData.leaveDetailsSpecific.sickInHospital}
                     />
                   </div>
@@ -521,7 +810,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify illness"
                       value={formData.leaveDetailsSpecific.sickOutPatientIllness || ''}
                       onChange={(e) => handleLeaveDetailsChange('sickOutPatientIllness', e.target.value)}
-                      className="ml-6 px-3 py-2 border rounded w-80"
+                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
                       disabled={!formData.leaveDetailsSpecific.sickOutPatient}
                     />
                   </div>
@@ -538,7 +827,7 @@ function FileLeave({ staffId }) {
                     placeholder="specify illness"
                     value={formData.leaveDetailsSpecific.womenIllness || ''}
                     onChange={(e) => handleLeaveDetailsChange('womenIllness', e.target.value)}
-                    className="px-3 py-2 border rounded w-80"
+                    className="px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
                   />
                 </div>
               </div>
@@ -580,7 +869,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify other"
                       value={formData.leaveDetailsSpecific.studyOtherDetails || ''}
                       onChange={(e) => handleLeaveDetailsChange('studyOtherDetails', e.target.value)}
-                      className="ml-6 px-3 py-2 border rounded w-80"
+                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
                       disabled={!formData.leaveDetailsSpecific.studyOther}
                     />
                   </div>
@@ -622,7 +911,7 @@ function FileLeave({ staffId }) {
               name="workingDaysApplied"
               value={formData.workingDaysApplied}
               readOnly
-              className="w-full px-4 py-2 border rounded bg-gray-100 cursor-not-allowed"
+              className="w-full px-4 py-2 border border-blue-100 rounded-md bg-blue-50/60 cursor-not-allowed"
             />
             <p className="text-sm text-gray-600 mt-2">Automatically calculated based on start and end dates (inclusive)</p>
           </div>
@@ -638,7 +927,7 @@ function FileLeave({ staffId }) {
                     type="date"
                     value={range.startDate}
                     onChange={e => handleDateRangeChange(idx, 'startDate', e.target.value)}
-                    className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                    className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   />
                 </div>
                 <div className="flex gap-2 items-end">
@@ -648,14 +937,14 @@ function FileLeave({ staffId }) {
                       type="date"
                       value={range.endDate}
                       onChange={e => handleDateRangeChange(idx, 'endDate', e.target.value)}
-                      className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                      className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                     />
                   </div>
                   {formData.dateRanges.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeDateRange(idx)}
-                      className="ml-2 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                      className="ml-2 px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
                       title="Remove this date range"
                     >
                       –
@@ -665,7 +954,7 @@ function FileLeave({ staffId }) {
                     <button
                       type="button"
                       onClick={addDateRange}
-                      className="ml-2 px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                      className="ml-2 px-2 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                       title="Add another date range"
                     >
                       +
@@ -711,7 +1000,7 @@ function FileLeave({ staffId }) {
               name="lateFilingExplanation"
               value={formData.lateFilingExplanation}
               onChange={handleChange}
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-red-500"
+              className="w-full px-4 py-2 border border-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500"
               rows={3}
               required={showLateExplanation}
               placeholder="Please explain why you are filing less than 5 days before any leave start date."
@@ -721,11 +1010,96 @@ function FileLeave({ staffId }) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 font-bold"
+          className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
         >
           {loading ? (editingLeaveId ? 'Updating...' : 'Filing...') : (editingLeaveId ? 'Update & Resubmit Leave Request' : 'File Leave Request')}
         </button>
       </form>
+
+        <aside className="space-y-4 xl:col-span-4 xl:sticky xl:top-4">
+          <section className="rounded-lg border border-blue-100 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold text-blue-950">Leave Balances</h2>
+            <p className="mt-1 text-sm text-slate-600">Current available credits from your leave record.</p>
+            {leaveBalancesLoading ? (
+              <p className="mt-4 text-sm text-slate-600">Loading leave balances...</p>
+            ) : leaveBalancesError ? (
+              <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{leaveBalancesError}</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {[
+                  ['Vacation Leave', leaveBalances.vacation],
+                  ['Sick Leave', leaveBalances.sick],
+                  ['CTO', leaveBalances.cto],
+                  [`Wellness (${selectedLeaveYear})`, wellnessBalancesLoading
+                    ? null
+                    : wellnessBalancesError
+                      ? 'Unavailable'
+                      : wellnessBalance],
+                ].map(([label, balance]) => (
+                  <div key={label} className="flex items-center justify-between rounded-md bg-blue-50 px-3 py-2">
+                    <span className="text-sm font-semibold text-blue-900">{label}</span>
+                    <span className="font-bold text-slate-900">
+                      {balance === null ? 'Loading...' : typeof balance === 'number' ? `${formatBalance(balance)} days` : balance}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {wellnessBalancesError && (
+              <p role="alert" className="mt-3 text-xs text-red-700">{wellnessBalancesError}</p>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-blue-100 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-bold text-blue-950">Projected Balance</h2>
+            <p className="mt-1 text-sm text-slate-600">Estimate if this request is approved.</p>
+            {!selectedLeaveType ? (
+              <p className="mt-4 text-sm text-slate-600">Select a leave type and enter inclusive dates to see the estimate.</p>
+            ) : requestedLeaveDays <= 0 ? (
+              <p className="mt-4 text-sm text-slate-600">Enter valid inclusive dates to calculate the requested days.</p>
+            ) : isWellnessSelected && wellnessBalancesLoading ? (
+              <p className="mt-4 text-sm text-slate-600">Loading your Wellness Leave balance...</p>
+            ) : isWellnessSelected && wellnessBalancesError ? (
+              <p className="mt-4 text-sm text-red-700">The projected Wellness Leave balance is unavailable because it could not be loaded.</p>
+            ) : deduction && leaveBalancesLoading ? (
+              <p className="mt-4 text-sm text-slate-600">Loading your current balance to calculate the estimate...</p>
+            ) : deduction && leaveBalancesError ? (
+              <p className="mt-4 text-sm text-red-700">The projected balance is unavailable because your current leave balance could not be loaded.</p>
+            ) : deduction ? (
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-slate-600">{deduction.label} before request</span>
+                  <span className="font-semibold">{formatBalance(deduction.balance)} days</span>
+                </div>
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-slate-600">Requested</span>
+                  <span className="font-semibold">−{formatBalance(requestedLeaveDays)} days</span>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-blue-100 pt-2">
+                  <span className="font-semibold text-blue-950">Estimated remaining</span>
+                  <span className={`font-bold ${projectedBalance < 0 ? 'text-red-700' : 'text-green-700'}`}>
+                    {formatBalance(projectedBalance)} days
+                  </span>
+                </div>
+                {projectedShortfall > 0 && (
+                  <p className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+                    This request is {formatBalance(projectedShortfall)} day(s) more than your current {deduction.label.toLowerCase()} balance.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+                {selectedLeaveType} is not deducted from the Vacation Leave or Sick Leave balances shown here. Any special limits or eligibility rules still apply.
+              </p>
+            )}
+            {selectedLeaveType && requestedLeaveDays > 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Estimate is based on {formatBalance(requestedLeaveDays)} calendar day(s); final approval and leave-record posting may change the result.
+              </p>
+            )}
+          </section>
+        </aside>
+        </div>
     </div>
   );
 }

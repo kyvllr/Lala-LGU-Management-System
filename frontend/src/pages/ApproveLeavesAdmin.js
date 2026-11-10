@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { leaveAPI, leaveRecordAPI } from '../api';
+import { leaveAPI, leaveRecordAPI, staffAPI } from '../api';
 import { FiSearch } from 'react-icons/fi';
 import { openPrintWindow } from '../components/PrintableLeaveForm';
+import { normalizeRole, ROLES } from '../constants';
 
 // Helper to enrich leave object with staff's leave balance data for printing
 async function enrichLeaveWithBalance(leave) {
@@ -89,12 +90,18 @@ async function enrichLeaveWithBalance(leave) {
 
     recordsBeforeApplication.forEach((record) => {
       const particulars = String(record.particulars || '').toLowerCase();
-      const vlDelta = (parseFloat(record.vlEarned) || 0) - (parseFloat(record.vlAbsentUndertimeWPay) || 0);
+      const vacationLeaveDeduction = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+        ? parseFloat(record.vlAbsentUndertimeWPay) || parseFloat(record.numberOfDays) || 0
+        : parseFloat(record.vlAbsentUndertimeWPay) || 0;
+      const vlDelta = (parseFloat(record.vlEarned) || 0) - vacationLeaveDeduction;
       const slDelta = (parseFloat(record.slEarned) || 0) - (parseFloat(record.slAbsentUndertimeWPay) || 0);
 
       if (
         particulars.includes('vacation leave') ||
         particulars === 'vl' ||
+        particulars === 'mandatory/force leave' ||
+        particulars === 'monetization' ||
+        particulars === 'wellness' ||
         particulars.includes('undertime') ||
         particulars.includes('tardy') ||
         particulars.includes('earned leave')
@@ -124,7 +131,11 @@ async function enrichLeaveWithBalance(leave) {
     
     // Determine how many days this application uses
     const normalizedLeaveType = String(leave.leaveType || '').toLowerCase();
-    const vlDaysThisApp = (normalizedLeaveType === 'vacation leave' || normalizedLeaveType.includes('vacation')) ? (leave.numberOfDays || 0) : 0;
+    const vlDaysThisApp = (
+      normalizedLeaveType === 'vacation leave'
+      || normalizedLeaveType.includes('vacation')
+      || normalizedLeaveType === 'mandatory/force leave'
+    ) ? (leave.numberOfDays || 0) : 0;
     const slDaysThisApp = (normalizedLeaveType === 'sick leave' || normalizedLeaveType.includes('sick')) ? (leave.numberOfDays || 0) : 0;
     const ctoDaysThisApp = (normalizedLeaveType.includes('cto') || normalizedLeaveType.includes('compensatory')) ? (leave.numberOfDays || 0) : 0;
     
@@ -216,18 +227,17 @@ const getApproverName = () => {
 };
 
 function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
-  const municipalAssessors = [
-    'MICHAEL V. POGOY',
-    'JANE A. DOE',
-    'JUAN D. CRUZ',
-  ];
+  const authorizedOfficerName = 'WARNIE B. EDREA';
+  const customAuthorizedOfficerOption = '__custom_authorized_officer__';
   const customAssessorOption = '__custom_assessor__';
   const printSetupStorageKey = 'leave_print_setup_by_id_v1';
   const getDefaultPrintForm = () => ({
     recommendation: 'For Approval',
     disapprovalRemark: '',
     disapprovedDueTo: '',
-    municipalAssessor: municipalAssessors[0],
+    authorizedOfficer: customAuthorizedOfficerOption,
+    customAuthorizedOfficer: '',
+    municipalAssessor: customAssessorOption,
     customMunicipalAssessor: '',
   });
   const getLeaveKey = (leave) => String(leave?.leaveId || leave?.id || '');
@@ -278,6 +288,8 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [printTargetLeave, setPrintTargetLeave] = useState(null);
   const [printForm, setPrintForm] = useState(getDefaultPrintForm());
+  const [authorizedOfficerOptions, setAuthorizedOfficerOptions] = useState([]);
+  const [municipalAssessors, setMunicipalAssessors] = useState([]);
 
   useEffect(() => {
     const approverName = getApproverName();
@@ -296,6 +308,85 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
   useEffect(() => {
     fetchAdminLeaves();
   }, [viewStatus]);
+
+  // Move staff list loading to a function so it can be called on demand
+  const loadPrintSignatoryOptions = async () => {
+    try {
+      const response = await staffAPI.getAll();
+      const list = Array.isArray(response?.data) ? response.data : [];
+      const mappedAuthorizedOfficer = list
+        .map((staff) => {
+          const role = normalizeRole(staff?.role || staff?.userRole);
+          const isAdminRole = role === ROLES.ADMIN_HR;
+          const isMayorRole = role === ROLES.SUPER_ADMIN;
+          if (!isAdminRole && !isMayorRole) return null;
+
+          const name = String(
+            staff?.name ||
+            staff?.fullName ||
+            [staff?.firstName, staff?.middleName, staff?.lastName].filter(Boolean).join(' ') ||
+            ''
+          ).trim().toUpperCase();
+          if (!name) return null;
+
+          return {
+            value: name,
+            roleType: isAdminRole ? 'admin' : 'mayor',
+            label: `${name} (${isAdminRole ? 'Admin' : 'Mayor'})`,
+          };
+        })
+        .filter(Boolean);
+
+      const mappedHeadOfficer = list
+        .map((staff) => {
+          const role = normalizeRole(staff?.role || staff?.userRole);
+          if (role !== ROLES.HEAD_OFFICER) return null;
+
+          const name = String(
+            staff?.name ||
+            staff?.fullName ||
+            [staff?.firstName, staff?.middleName, staff?.lastName].filter(Boolean).join(' ') ||
+            ''
+          ).trim().toUpperCase();
+          return name || null;
+        })
+        .filter(Boolean);
+
+      const deduped = [];
+      const seen = new Set();
+      mappedAuthorizedOfficer.forEach((option) => {
+        const key = option.value;
+        if (seen.has(key)) return;
+        seen.add(key);
+        deduped.push(option);
+      });
+
+      deduped.sort((a, b) => {
+        if (a.roleType !== b.roleType) return a.roleType === 'admin' ? -1 : 1;
+        return a.value.localeCompare(b.value);
+      });
+
+      setAuthorizedOfficerOptions(deduped);
+
+      const dedupedHeadOfficer = [];
+      const seenHeadOfficer = new Set();
+      mappedHeadOfficer.forEach((name) => {
+        if (seenHeadOfficer.has(name)) return;
+        seenHeadOfficer.add(name);
+        dedupedHeadOfficer.push(name);
+      });
+      dedupedHeadOfficer.sort((a, b) => a.localeCompare(b));
+      setMunicipalAssessors(dedupedHeadOfficer);
+    } catch (err) {
+      setAuthorizedOfficerOptions([]);
+      setMunicipalAssessors([]);
+    }
+  };
+
+  // Only load staff list on mount for initial display (optional, can be removed if not needed)
+  useEffect(() => {
+    loadPrintSignatoryOptions();
+  }, []);
 
   const fetchAdminLeaves = async () => {
     try {
@@ -400,12 +491,23 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
     }
   };
 
-  const openPrintSetupModal = (leave) => {
+  const openPrintSetupModal = async (leave) => {
+    // Always reload staff list before opening modal for real-time data
+    await loadPrintSignatoryOptions();
     const leaveKey = getLeaveKey(leave);
     const savedPrintForm = loadSavedPrintForm(leaveKey);
+    const defaultAuthorizedOfficer = authorizedOfficerOptions[0]?.value || customAuthorizedOfficerOption;
+    const defaultMunicipalAssessor = municipalAssessors[0] || customAssessorOption;
+    const nextPrintForm = savedPrintForm
+      ? savedPrintForm
+      : {
+          ...getDefaultPrintForm(),
+          authorizedOfficer: defaultAuthorizedOfficer,
+          municipalAssessor: defaultMunicipalAssessor,
+        };
 
     setPrintTargetLeave(leave);
-    setPrintForm(savedPrintForm || getDefaultPrintForm());
+    setPrintForm(nextPrintForm);
     setShowPrintModal(true);
     setError('');
   };
@@ -429,6 +531,20 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       return;
     }
 
+    const selectedAuthorizedOfficerOption = authorizedOfficerOptions.find(
+      (option) => option.value === printForm.authorizedOfficer
+    );
+    const isCustomAuthorizedOfficer =
+      printForm.authorizedOfficer === customAuthorizedOfficerOption || !selectedAuthorizedOfficerOption;
+    const selectedAuthorizedOfficerName = isCustomAuthorizedOfficer
+      ? printForm.customAuthorizedOfficer.trim().toUpperCase()
+      : selectedAuthorizedOfficerOption.value;
+
+    if (!selectedAuthorizedOfficerName) {
+      setError('Authorized Officer is required before printing.');
+      return;
+    }
+
     const selectedMunicipalAssessor =
       printForm.municipalAssessor === customAssessorOption
         ? printForm.customMunicipalAssessor.trim()
@@ -442,6 +558,8 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
     const leaveKey = getLeaveKey(printTargetLeave);
     savePrintForm(leaveKey, {
       ...printForm,
+      authorizedOfficer: printForm.authorizedOfficer,
+      customAuthorizedOfficer: printForm.customAuthorizedOfficer,
       municipalAssessor: printForm.municipalAssessor,
       customMunicipalAssessor: printForm.customMunicipalAssessor,
     });
@@ -452,6 +570,10 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       printRecommendation: printForm.recommendation,
       printRecommendationRemark: printForm.disapprovalRemark.trim(),
       printDisapprovedDueTo: printForm.disapprovedDueTo.trim(),
+      secondAuthorizedOfficerName: selectedAuthorizedOfficerName,
+      secondAuthorizedOfficerRoleType: isCustomAuthorizedOfficer
+        ? 'other'
+        : selectedAuthorizedOfficerOption.roleType,
       municipalAssessor: selectedMunicipalAssessor,
     });
 
@@ -460,7 +582,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
     setError('');
   };
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
   // Filter leaves based on search query and attribute
   const filteredLeaves = leaves.filter((leave) => {
@@ -480,16 +602,16 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
 
   return (
     <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-2">Approve Leave Requests</h1>
-      <p className="text-gray-600 mb-6 text-sm">Admin - Final Approval Level - These leaves have been approved by the Head Officer</p>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Approve Leave Requests</h1>
+      <p className="text-blue-700/80 mb-6 text-sm">Admin - Final Approval Level - These leaves have been approved by the Head Officer</p>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Requests List */}
         <div className="lg:col-span-1">
           {/* Search and Filter Bar */}
-          <div className="mb-4 flex flex-col sm:flex-row gap-2 w-full">
+          <div className="mb-4 flex flex-col sm:flex-row gap-2 w-full rounded-lg border border-blue-100 bg-blue-50/60 p-3">
             <div className="relative flex-1">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -497,7 +619,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                 placeholder="Search leave requests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               />
             </div>
             <select
@@ -506,7 +628,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                 setFilterAttribute(e.target.value);
                 setSearchQuery('');
               }}
-              className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white cursor-pointer"
+              className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm font-medium bg-white cursor-pointer"
             >
               <option value="staffName">Staff Name</option>
               <option value="leaveType">Leave Type</option>
@@ -520,20 +642,20 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
               <div
                 key={leave.leaveId}
                 onClick={() => setSelectedLeave(leave)}
-                className={`bg-white p-4 rounded shadow cursor-pointer transition ${
-                  selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-600' : ''
+                className={`bg-white p-4 rounded-lg border border-blue-100 shadow-sm cursor-pointer transition ${
+                  selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-500' : ''
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold">{leave.staffName}</h3>
-                    <p className="text-gray-600 text-sm">{leave.leaveType}</p>
-                    <p className="text-gray-600 text-sm">
+                    <h3 className="font-semibold text-blue-950">{leave.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm">{leave.leaveType}</p>
+                    <p className="text-blue-700/80 text-sm">
                       {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm block">
+                    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-semibold block">
                       {leave.numberOfDays} days
                     </span>
                     {leave.status === 'Approved' && (
@@ -543,7 +665,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                           e.stopPropagation();
                           openPrintSetupModal(leave);
                         }}
-                        className="mt-2 w-full bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800"
+                        className="mt-2 w-full bg-slate-600 text-white px-3 py-1 rounded-md hover:bg-slate-700 text-xs font-semibold"
                       >
                         Print
                       </button>
@@ -563,28 +685,28 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
 
         {/* Approval Panel */}
         {selectedLeave && (
-          <div className="bg-white p-6 rounded shadow lg:col-span-1">
-            <h2 className="text-xl font-bold mb-4">Leave Details</h2>
+          <div className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm lg:col-span-1">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Leave Details</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <div>
-                <p className="text-gray-600 text-sm">Staff</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Staff</p>
                 <p className="font-bold">{selectedLeave.staffName}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Date Filed</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date Filed</p>
                 <p className="font-bold">{formatDate(selectedLeave.filingDate || selectedLeave.createdAt)}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Office/Department</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Office/Department</p>
                 <p className="font-bold">{selectedLeave.office || selectedLeave.staffDepartment || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Type</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Type</p>
                 <p className="font-bold">{selectedLeave.leaveType}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Duration</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Duration</p>
                 <p className="font-bold">
                   {Array.isArray(selectedLeave.dateRanges) && selectedLeave.dateRanges.length > 0
                     ? formatDateRanges(selectedLeave.dateRanges)
@@ -592,11 +714,11 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                 </p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Days</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Days</p>
                 <p className="font-bold">{selectedLeave.numberOfDays ?? 'N/A'}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Commutation</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Commutation</p>
                 <p className="font-bold">
                   {selectedLeave.communicationRequested
                     ? 'Requested'
@@ -610,7 +732,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
             {/* Late Filing Explanation */}
             {selectedLeave.lateFilingExplanation && (
               <div className="mb-4">
-                <p className="text-gray-600 text-sm font-semibold">Explanation for Late Filing</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide font-semibold">Explanation for Late Filing</p>
                 <p className="font-bold text-red-600 whitespace-pre-line">{selectedLeave.lateFilingExplanation}</p>
               </div>
             )}
@@ -621,7 +743,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 ></textarea>
               </div>
 
@@ -630,7 +752,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                   <button
                     type="button"
                     onClick={() => openPrintSetupModal(selectedLeave)}
-                    className="w-full py-2 rounded text-white font-bold bg-blue-600 hover:bg-blue-700"
+                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
                   >
                     Print
                   </button>
@@ -638,7 +760,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded text-white font-bold bg-green-600 hover:bg-green-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve
                 </button>
@@ -648,7 +770,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-red-600 hover:bg-red-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -658,7 +780,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-amber-600 hover:bg-amber-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Approve with Revision
                 </button>
@@ -669,29 +791,29 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
               onChange={(e) => setDisapproveComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Reason for disapproval"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowDisapproveModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDisapprove}
-                className="px-4 py-2 rounded bg-red-600 text-white"
+                className="px-4 py-2 rounded-md bg-red-500 text-white text-sm font-semibold"
               >
                 Confirm Disapprove
               </button>
@@ -701,29 +823,29 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Approve with Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}
               onChange={(e) => setRevisionComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Required revisions"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowRevisionModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleApproveWithRevision}
-                className="px-4 py-2 rounded bg-amber-600 text-white"
+                className="px-4 py-2 rounded-md bg-orange-500 text-white text-sm font-semibold"
               >
                 Send for Revision
               </button>
@@ -784,6 +906,36 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                   placeholder="Reason to appear in section 7.D"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2">Authorized Officer</label>
+                <div className="mb-2 text-xs text-gray-500">
+                  First signature is fixed: {authorizedOfficerName}
+                </div>
+                <select
+                  value={printForm.authorizedOfficer}
+                  onChange={(e) => updatePrintForm((prev) => ({ ...prev, authorizedOfficer: e.target.value }))}
+                  className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {authorizedOfficerOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                  <option value={customAuthorizedOfficerOption}>Other (manual input)</option>
+                </select>
+              </div>
+
+              {printForm.authorizedOfficer === customAuthorizedOfficerOption && (
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Custom Authorized Officer</label>
+                  <input
+                    type="text"
+                    value={printForm.customAuthorizedOfficer}
+                    onChange={(e) => updatePrintForm((prev) => ({ ...prev, customAuthorizedOfficer: e.target.value }))}
+                    className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter authorized officer name"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold mb-2">Municipal Assessor</label>

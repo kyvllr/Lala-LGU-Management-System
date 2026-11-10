@@ -159,7 +159,7 @@ See [API_EXAMPLES.md](API_EXAMPLES.md) for detailed examples.
 ## Features
 
 ### Staff Features
-✅ File leave requests (5 types: Vacation, Sick, Emergency, Special, Study)
+✅ File leave requests (6 types: Vacation, Sick, Emergency, Special, Study, Wellness)
 ✅ Track leave request status
 ✅ Modify pending leave requests
 ✅ Request travel orders with budget tracking

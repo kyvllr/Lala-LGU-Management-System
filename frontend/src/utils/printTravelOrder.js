@@ -26,6 +26,15 @@ const formatDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
 };
 
+const getCheckedTravelPurposes = (order) => [
+  order.officialBusiness ? 'Official Business' : null,
+  order.officialTime ? 'Official Time' : null,
+  order.meeting ? 'Meeting' : null,
+  order.travel ? 'Travel' : null,
+  order.training ? 'Training' : null,
+  order.seminar ? 'Seminar' : null,
+].filter(Boolean);
+
 export default function printTravelOrder(order) {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
@@ -173,7 +182,7 @@ export default function printTravelOrder(order) {
                 </tr>
                 <tr class="sep inner">
                   <td style="font-weight:700">PLEASE CHECK</td>
-                  <td>${escapeHtml([order.officialBusiness ? 'Official Business' : null, order.officialTime ? 'Official Time' : null].filter(Boolean).join(', '))}</td>
+                  <td>${escapeHtml(getCheckedTravelPurposes(order).join(', '))}</td>
                 </tr>
                 <tr class="sep inner">
                   <td style="font-weight:700">VENUE / DESTINATION</td>

@@ -4,18 +4,51 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const { ROLES, DEPARTMENTS, ROLE_DISPLAY_NAMES, ROLES_WITH_DEPARTMENTS, ROLE_HIERARCHY } = require('./constants');
+const { randomUUID } = require('crypto');
 require('dotenv').config();
 
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const VAULT_BASE_UPLOAD_DIR = path.join(__dirname, 'uploads', 'vault');
+const VAULT_DEFAULT_FOLDER = 'General';
+const PAYMENT_PROOF_UPLOAD_DIR = path.join(__dirname, 'uploads', 'payment-proofs');
+
+if (!fs.existsSync(VAULT_BASE_UPLOAD_DIR)) {
+  fs.mkdirSync(VAULT_BASE_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(PAYMENT_PROOF_UPLOAD_DIR)) {
+  fs.mkdirSync(PAYMENT_PROOF_UPLOAD_DIR, { recursive: true });
+}
+
+const sanitizeFolderName = (name) => String(name || '')
+  .trim()
+  .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+  .replace(/\s+/g, ' ')
+  .slice(0, 120);
+
+const ensureVaultFolderPath = (ownerStaffId, folderName) => {
+  const safeOwner = String(ownerStaffId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeFolder = sanitizeFolderName(folderName) || VAULT_DEFAULT_FOLDER;
+  const folderPath = path.join(VAULT_BASE_UPLOAD_DIR, safeOwner, safeFolder);
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true });
+  }
+  return folderPath;
+};
+
+const getVaultOwnerStaffId = (user) => String(user?.staffId || user?.id || user?.email || 'admin');
 
 const LEAVE_TYPES = [
   'Vacation Leave',
   'Mandatory/Force Leave',
   'Sick Leave',
+  'Wellness',
   'Maternity Leave',
   'Paternity Leave',
   'Special Privilege Leave',
@@ -29,11 +62,58 @@ const LEAVE_TYPES = [
   'Adoption Leave',
   'Rehabilitation Privilege',
   'Others',
+  'CTO',
+  'Earned Leave',
+  'Monetization',
   // Backward-compatibility for older saved values
   'Vacation',
   'Emergency Leave',
   'Special Leave',
 ];
+
+const FORCE_LEAVE_MAX_DAYS_PER_APPLICATION = 5;
+const WELLNESS_ANNUAL_LIMIT = 5;
+
+const resolveLeaveCalendarYear = (leaveDoc) => {
+  const rangeStarts = (Array.isArray(leaveDoc?.dateRanges) ? leaveDoc.dateRanges : [])
+    .map((range) => range?.startDate || range?.from)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a - b);
+  const candidates = [rangeStarts[0], leaveDoc?.startDate, leaveDoc?.filingDate, leaveDoc?.createdAt];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = new Date(candidate);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.getFullYear();
+    }
+  }
+
+  return new Date().getFullYear();
+};
+
+const getApprovedLeaveDaysForYear = async ({ staffId, leaveTypes, year, excludeLeaveId }) => {
+  const query = {
+    staffId,
+    status: 'Approved',
+    leaveType: { $in: leaveTypes },
+  };
+  if (excludeLeaveId) {
+    query.leaveId = { $ne: excludeLeaveId };
+  }
+
+  const approvedLeaves = await Leave.find(query)
+    .select('startDate dateRanges filingDate createdAt numberOfDays')
+    .lean();
+
+  return approvedLeaves.reduce((sum, leave) => (
+    resolveLeaveCalendarYear(leave) === year
+      ? sum + (Number(leave.numberOfDays) || 0)
+      : sum
+  ), 0);
+};
 
 const generateNextTravelControlNo = async (dateSource = new Date()) => {
   const date = new Date(dateSource);
@@ -81,11 +161,155 @@ const isSystemAdminRole = (rawRole) => {
   return [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR].includes(role);
 };
 
+const hasActivePdsUpdatePermission = (record) => {
+  if (!record || record.updatePermissionGranted !== true) {
+    return false;
+  }
+
+  if (!record.updatePermissionExpiresAt) {
+    return true;
+  }
+
+  const expiresAt = new Date(record.updatePermissionExpiresAt);
+  if (Number.isNaN(expiresAt.getTime())) {
+    return false;
+  }
+
+  return expiresAt.getTime() > Date.now();
+};
+
+const resolvePermissionExpiryDate = (durationDays) => {
+  if (durationDays == null) {
+    return undefined;
+  }
+
+  const parsed = Number(durationDays);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return new Date(Date.now() + parsed * 24 * 60 * 60 * 1000);
+};
+
+const resolveDpcrfLockWindowMs = (unit, value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  const multiplier = {
+    days: 24 * 60 * 60 * 1000,
+    weeks: 7 * 24 * 60 * 60 * 1000,
+    months: 30 * 24 * 60 * 60 * 1000,
+  }[String(unit || '').toLowerCase()];
+
+  if (!multiplier) {
+    return null;
+  }
+
+  return parsed * multiplier;
+};
+
+const getDpcrfPermissionState = (permission, now = Date.now()) => {
+  if (!permission) {
+    return false;
+  }
+
+  const expiryDate = permission.expiresAt ? new Date(permission.expiresAt) : null;
+  const hasValidExpiry = expiryDate && Number.isFinite(expiryDate.getTime());
+  const expiryPassed = hasValidExpiry && expiryDate.getTime() <= now;
+
+  if (permission.allowUpdate === true) {
+    return !hasValidExpiry || !expiryPassed;
+  }
+
+  if (permission.allowUpdate === false && hasValidExpiry && expiryPassed) {
+    return true;
+  }
+
+  return false;
+};
+
+const normalizeDpcrfPermissionRecord = (permission, yearValue) => {
+  const record = permission || {};
+  const now = Date.now();
+
+  return {
+    year: Number.isFinite(Number(yearValue)) ? Number(yearValue) : record.year || null,
+    allowUpdate: getDpcrfPermissionState(record, now),
+    lockMode: ['manual', 'days', 'weeks', 'months'].includes(String(record.lockMode || 'manual').toLowerCase())
+      ? String(record.lockMode).toLowerCase()
+      : 'manual',
+    durationValue: Number.isFinite(Number(record.durationValue)) && Number(record.durationValue) > 0
+      ? Number(record.durationValue)
+      : null,
+    expiresAt: record.expiresAt || null,
+    updatedBy: record.updatedBy || '',
+    updatedAt: record.updatedAt || null,
+  };
+};
+
+const canUpdateDpcrfPart = (permission) => getDpcrfPermissionState(permission);
+
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
+const vaultStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const ownerStaffId = getVaultOwnerStaffId(req.user);
+    const requestedFolder = sanitizeFolderName(req.body?.folder) || VAULT_DEFAULT_FOLDER;
+    const folderPath = ensureVaultFolderPath(ownerStaffId, requestedFolder);
+    cb(null, folderPath);
+  },
+  filename: (req, file, cb) => {
+    const extension = path.extname(file.originalname || '');
+    const baseName = path.basename(file.originalname || 'file', extension).replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}-${Math.random().toString(16).slice(2)}-${baseName}${extension}`);
+  },
+});
+
+const uploadVaultFiles = multer({
+  storage: vaultStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024,
+    files: 25,
+  },
+});
+
+const paymentProofStorage = multer.diskStorage({
+  destination: PAYMENT_PROOF_UPLOAD_DIR,
+  filename: (req, file, cb) => {
+    cb(null, `${randomUUID()}${path.extname(file.originalname || '').toLowerCase()}`);
+  },
+});
+const uploadPaymentProof = multer({
+  storage: paymentProofStorage,
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      cb(new Error('Proof of payment must be a PDF, JPG, or PNG file.'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+const removeUploadedPaymentProof = (file) => {
+  if (file?.path && fs.existsSync(file.path)) {
+    fs.unlinkSync(file.path);
+  }
+};
+
+const getPaymentProofMetadata = (file) => ({
+  fileName: path.basename(file.originalname || 'proof-of-payment'),
+  storageName: path.basename(file.filename),
+  mimeType: file.mimetype,
+  size: file.size,
+});
 
 // JWT Verification Middleware
 const verifyToken = (req, res, next) => {
@@ -175,6 +399,71 @@ const canViewStaff = (userRole, userDepartment, targetStaffDepartment) => {
   return false;
 };
 
+const isDepartmentStaffManager = (user) => {
+  const role = normalizeRole(user?.role);
+  return isSystemAdminRole(role) || role === ROLES.HEAD_OFFICER;
+};
+
+const getDepartmentStaff = async (user) => {
+  const role = normalizeRole(user?.role);
+  if (isSystemAdminRole(role)) return null;
+  if (role !== ROLES.HEAD_OFFICER || !String(user?.department || '').trim()) return [];
+
+  return Staff.find({ department: String(user.department).trim() })
+    .select('id email department')
+    .lean();
+};
+
+const canManageStaffId = async (user, staffId) => {
+  const role = normalizeRole(user?.role);
+  if (isSystemAdminRole(role)) return true;
+  if (role !== ROLES.HEAD_OFFICER || !String(staffId || '').trim()) return false;
+
+  const staff = await Staff.findOne({ id: String(staffId).trim() }).select('department').lean();
+  return Boolean(staff && staff.department === user.department);
+};
+
+const getPdsDepartmentFilter = (staffAccounts) => {
+  const staffIds = (staffAccounts || []).map((staff) => String(staff.id || '').trim()).filter(Boolean);
+  const staffEmails = (staffAccounts || [])
+    .map((staff) => String(staff.email || '').trim().toLowerCase())
+    .filter(Boolean);
+  const filters = [];
+  if (staffIds.length) {
+    filters.push({ ownerStaffId: { $in: staffIds } }, { submittedByStaffId: { $in: staffIds } });
+  }
+  if (staffEmails.length) {
+    filters.push(
+      { ownerEmail: { $in: staffEmails } },
+      { submittedByEmail: { $in: staffEmails } },
+      { email: { $in: staffEmails } },
+      {
+        $and: [
+          { ownerEmail: { $in: [null, ''] } },
+          { email: { $in: staffEmails } },
+        ],
+      }
+    );
+  }
+  return filters.length ? { $or: filters } : { _id: null };
+};
+
+const canManagePdsRecord = async (user, pds) => {
+  if (isSystemAdminRole(user?.role)) return true;
+  if (normalizeRole(user?.role) !== ROLES.HEAD_OFFICER || !pds) return false;
+
+  const staffId = String(pds.ownerStaffId || pds.submittedByStaffId || '').trim();
+  const email = String(pds.ownerEmail || pds.email || pds.submittedByEmail || '').trim().toLowerCase();
+  const identityFilter = [
+    ...(staffId ? [{ id: staffId }] : []),
+    ...(email ? [{ email: { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }] : []),
+  ];
+  if (!identityFilter.length) return false;
+
+  const staff = await Staff.findOne({ $or: identityFilter }).select('department').lean();
+  return Boolean(staff && staff.department === user.department);
+};
+
 // Middleware for role-based Middleware (allows super_admin to bypass all checks)
 const requireRole = (allowedRoles) => {
   // Convert single role string to array
@@ -218,6 +507,8 @@ const staffSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  profilePhotoDataUrl: { type: String, default: '' },
+  sexAtBirth: { type: String, enum: ['', 'Male', 'Female'], default: '' },
   role: { 
     type: String, 
     enum: [...Object.values(ROLES), 'admin'],
@@ -234,7 +525,20 @@ const staffSchema = new mongoose.Schema({
   dateOfBirth: Date,
   placeOfBirth: String,
   tinNumber: String,
+  businessPartnerNumber: String,
+  philhealthNo: String,
+  pagibigNo: String,
+  maritalStatus: String,
   dateHired: Date,
+  address: String,
+  employmentStatus: String,
+  lengthOfService: String,
+  monthlyBasicSalary: Number,
+  peraRata: String,
+  grossSalary: Number,
+  pendingAdministrativeCase: Boolean,
+  pendingCriminalCase: Boolean,
+  salaryGrade: String,
   isApproved: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   approvedAt: Date,
@@ -242,6 +546,117 @@ const staffSchema = new mongoose.Schema({
   eSignPermission: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
+
+const staffUpdateRequestSchema = new mongoose.Schema({
+  requestId: { type: String, required: true, unique: true },
+  staffId: { type: String, required: true },
+  staffName: { type: String, default: '' },
+  staffEmail: { type: String, default: '' },
+  currentFields: { type: mongoose.Schema.Types.Mixed, required: true },
+  requestedFields: { type: mongoose.Schema.Types.Mixed, required: true },
+  status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending', index: true },
+  reviewedBy: { type: String, default: '' },
+  reviewedAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+staffUpdateRequestSchema.index(
+  { staffId: 1 },
+  { unique: true, partialFilterExpression: { status: 'Pending' } }
+);
+
+const normalizeStaffProfileFields = (payload) => {
+  const fields = {};
+  const textFields = [
+    'address',
+    'employmentStatus',
+    'lengthOfService',
+    'peraRata',
+    'salaryGrade',
+    'businessPartnerNumber',
+    'philhealthNo',
+    'pagibigNo',
+    'maritalStatus',
+  ];
+  const salaryFields = ['monthlyBasicSalary', 'grossSalary'];
+  const caseFields = ['pendingAdministrativeCase', 'pendingCriminalCase'];
+
+  textFields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) {
+      fields[field] = payload[field] == null ? '' : String(payload[field]).trim();
+    }
+  });
+
+  for (const field of salaryFields) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue;
+    const value = payload[field];
+    if (value === '' || value === null || value === undefined) {
+      fields[field] = undefined;
+      continue;
+    }
+
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return { error: `${field} must be a non-negative number` };
+    }
+    fields[field] = amount;
+  }
+
+  for (const field of caseFields) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue;
+    const value = payload[field];
+    if (value === '' || value === null || value === undefined) {
+      fields[field] = undefined;
+    } else if (value === true || value === 'true') {
+      fields[field] = true;
+    } else if (value === false || value === 'false') {
+      fields[field] = false;
+    } else {
+      return { error: `${field} must be true or false` };
+    }
+  }
+
+  return { fields };
+};
+
+const calculateStaffLengthOfService = (dateValue, now = new Date()) => {
+  if (!dateValue) return '';
+  const start = new Date(dateValue);
+  if (Number.isNaN(start.getTime())) return '';
+
+  const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (startDay > end) return '';
+
+  let totalMonths = (now.getUTCFullYear() - start.getUTCFullYear()) * 12
+    + now.getUTCMonth() - start.getUTCMonth();
+  const startDayOfMonth = start.getUTCDate();
+  const endDayOfMonth = new Date(end).getUTCDate();
+  const lastDayOfTargetMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  if (endDayOfMonth < Math.min(startDayOfMonth, lastDayOfTargetMonth)) totalMonths -= 1;
+
+  const elapsedYears = Math.floor(totalMonths / 12);
+  const elapsedMonths = totalMonths % 12;
+  const anchorMonth = start.getUTCMonth() + totalMonths;
+  const anchorYear = start.getUTCFullYear() + Math.floor(anchorMonth / 12);
+  const normalizedAnchorMonth = ((anchorMonth % 12) + 12) % 12;
+  const anchorDay = Math.min(
+    startDayOfMonth,
+    new Date(Date.UTC(anchorYear, normalizedAnchorMonth + 1, 0)).getUTCDate()
+  );
+  const anchor = Date.UTC(anchorYear, normalizedAnchorMonth, anchorDay);
+  const remainingDays = Math.floor((end - anchor) / 86400000);
+  const elapsedWeeks = Math.floor(remainingDays / 7);
+  const elapsedDays = remainingDays % 7;
+
+  return [
+    elapsedYears ? `${elapsedYears} ${elapsedYears === 1 ? 'year' : 'years'}` : '',
+    elapsedMonths ? `${elapsedMonths} ${elapsedMonths === 1 ? 'month' : 'months'}` : '',
+    elapsedWeeks ? `${elapsedWeeks} ${elapsedWeeks === 1 ? 'week' : 'weeks'}` : '',
+    elapsedDays ? `${elapsedDays} ${elapsedDays === 1 ? 'day' : 'days'}` : '',
+  ].filter(Boolean).join(', ') || '0 days';
+};
 
 
 // Define Leave Schema
@@ -317,6 +732,10 @@ const travelOrderSchema = new mongoose.Schema({
   periodCoveredTo: Date,
   officialBusiness: { type: Boolean, default: false },
   officialTime: { type: Boolean, default: false },
+  meeting: { type: Boolean, default: false },
+  travel: { type: Boolean, default: false },
+  training: { type: Boolean, default: false },
+  seminar: { type: Boolean, default: false },
   venueDestination: String,
   expensesCovered: String,
   fundSourcePapCode: String,
@@ -440,6 +859,114 @@ const overtimeSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 });
 
+// Define COE (Certificate of Employment) Schema
+const coeSchema = new mongoose.Schema({
+  coeId: { type: String, required: true, unique: true },
+  staffId: { type: String, required: true, index: true },
+  staffName: String,
+  staffDepartment: String,
+  
+  // Request details
+  fullName: String,
+  purpose: String,
+  dateOfApplication: Date,
+  positionTitle: String,
+  office: String,
+  address: String,
+  employmentStatus: String,
+  lengthOfService: String,
+  monthlySalary: Number,
+  peraRata: String,
+  grossSalary: Number,
+  pendingAdministrativeCase: Boolean,
+  pendingCriminalCase: Boolean,
+  periodFrom: Date,
+  periodTo: Date,
+  numberOfCopies: { type: Number, default: 1 },
+  remarks: String,
+  paymentProof: {
+    fileName: String,
+    storageName: String,
+    mimeType: String,
+    size: Number,
+  },
+  
+  // Status and approval tracking
+  status: { 
+    type: String, 
+    enum: ['Pending', 'For Revision', 'Approved', 'Disapproved'],
+    default: 'Pending'
+  },
+  revisionRequestedBy: String,
+  revisionRequestedByRole: String,
+  revisionRequestedAt: Date,
+  revisionComment: String,
+  approvedBy: String,
+  approvalDate: Date,
+  approvalRemarks: String,
+  disapprovedBy: String,
+  disapprovalDate: Date,
+  disapprovalRemarks: String,
+  
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const noPendencyRequestSchema = new mongoose.Schema({
+  requestId: { type: String, required: true, unique: true },
+  staffId: { type: String, required: true, index: true },
+  staffName: String,
+  staffDepartment: String,
+  fullName: { type: String, required: true },
+  position: { type: String, required: true },
+  pendingCase: { type: String, enum: ['Yes', 'No'], required: true },
+  dateOfApplication: { type: Date, required: true },
+  paymentProof: {
+    fileName: String,
+    storageName: String,
+    mimeType: String,
+    size: Number,
+  },
+  status: {
+    type: String,
+    enum: ['Pending', 'Approved', 'Disapproved'],
+    default: 'Pending',
+  },
+  reviewedBy: String,
+  reviewDate: Date,
+  reviewRemarks: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const noLeaveWithoutPayCertificateSchema = new mongoose.Schema({
+  requestId: { type: String, required: true, unique: true },
+  staffId: { type: String, required: true, index: true },
+  staffName: String,
+  staffDepartment: String,
+  fullName: { type: String, required: true },
+  position: { type: String, required: true },
+  periodFrom: { type: Date, required: true },
+  periodTo: { type: Date, required: true },
+  dateOfApplication: { type: Date, required: true },
+  paymentProof: {
+    fileName: String,
+    storageName: String,
+    mimeType: String,
+    size: Number,
+  },
+  status: {
+    type: String,
+    enum: ['Pending', 'Approved', 'Disapproved'],
+    default: 'Pending',
+  },
+  reviewedBy: String,
+  reviewDate: Date,
+  reviewRemarks: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
 // Define Service Record Schema
 const serviceRecordSchema = new mongoose.Schema({
   recordId: { type: String, required: true, unique: true },
@@ -511,9 +1038,21 @@ const systemLogSchema = new mongoose.Schema({
 
 systemLogSchema.index({ timestamp: -1 });
 
+const learningDevelopmentEntrySchema = new mongoose.Schema({
+  title: String,
+  from: String,
+  to: String,
+  hours: String,
+  type: String,
+  conductedBy: String,
+}, { _id: false });
+
 // Define Personal Data Sheet Schema
 const personalDataSheetSchema = new mongoose.Schema({
   pdsId: { type: String, required: true, unique: true },
+  ownerStaffId: { type: String, index: true, sparse: true },
+  ownerEmail: { type: String, index: true, lowercase: true, trim: true },
+  submittedOnBehalf: { type: Boolean, default: false },
   submittedByStaffId: { type: String, index: true, sparse: true },
   submittedByEmail: { type: String, index: true, lowercase: true, trim: true },
   submittedByName: String,
@@ -525,6 +1064,15 @@ const personalDataSheetSchema = new mongoose.Schema({
   placeOfBirth: String,
   sexAtBirth: { type: String, enum: ['Male', 'Female'] },
   civilStatus: { type: String, enum: ['Single', 'Married', 'Widowed', 'Separated', 'Other'] },
+  height: String,
+  weight: String,
+  bloodType: String,
+  gsisNo: String,
+  pagibigNo: String,
+  philhealthNo: String,
+  sssNo: String,
+  tinNo: String,
+  agencyEmployeeNo: String,
   citizenship: {
     type: {
       type: String,
@@ -558,6 +1106,8 @@ const personalDataSheetSchema = new mongoose.Schema({
   telephone: String,
   mobile: { type: String, required: true },
   email: { type: String, required: true },
+  photoDataUrl: { type: String, default: '' },
+  jobApplication: { type: mongoose.Schema.Types.Mixed, default: undefined },
   familyBackground: {
     spouse: {
       surname: String,
@@ -616,6 +1166,8 @@ const personalDataSheetSchema = new mongoose.Schema({
       to: String,
       positionTitle: String,
       company: String,
+      monthlySalary: String,
+      salaryJobPayGrade: String,
       statusOfAppointment: String,
       govtService: String,
       duties: String,
@@ -630,16 +1182,7 @@ const personalDataSheetSchema = new mongoose.Schema({
       position: String,
     },
   ],
-  learningDevelopment: [
-    {
-      title: String,
-      from: String,
-      to: String,
-      hours: String,
-      type: String,
-      conductedBy: String,
-    },
-  ],
+  learningDevelopment: [learningDevelopmentEntrySchema],
   specialSkills: [String],
   distinctions: [String],
   memberships: [String],
@@ -656,6 +1199,26 @@ const personalDataSheetSchema = new mongoose.Schema({
   convictedDetails: String,
   separated: String,
   separatedDetails: String,
+  recordCategory: { type: String, default: '' },
+  separationReason: { type: String, default: '' },
+  specialOrderNumberAttachment: {
+    fileName: { type: String, default: '' },
+    mimeType: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    storagePath: { type: String, default: '' },
+  },
+  effectivityDate: { type: Date, default: null },
+  separationOrder: {
+    orderNumber: { type: String, default: '' },
+    year: { type: Number, default: null },
+    orderDate: { type: Date, default: null },
+    fullName: { type: String, default: '' },
+    position: { type: String, default: '' },
+    department: { type: String, default: '' },
+    monthlyCompensation: { type: Number, default: null },
+    separationReason: { type: String, default: '' },
+    effectivityDate: { type: Date, default: null },
+  },
   candidate: String,
   candidateDetails: String,
   resignedToCampaign: String,
@@ -689,23 +1252,489 @@ const personalDataSheetSchema = new mongoose.Schema({
   remarks: String,
   reviewedBy: String,
   reviewedAt: Date,
+  updatePermissionGranted: { type: Boolean, default: false },
+  updatePermissionGrantedAt: Date,
+  updatePermissionGrantedBy: String,
+  updatePermissionExpiresAt: Date,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
 
+const pdsAwardeeSchema = new mongoose.Schema({
+  awardeeId: { type: String, required: true, unique: true },
+  sourcePdsId: { type: String, required: true, index: true },
+  awardType: { type: String, required: true, trim: true },
+  pdsSnapshot: { type: mongoose.Schema.Types.Mixed, required: true },
+  createdBy: String,
+  createdAt: { type: Date, default: Date.now },
+});
+
+const specialOrderCounterSchema = new mongoose.Schema({
+  year: { type: Number, required: true, unique: true },
+  sequence: { type: Number, required: true, default: 0 },
+});
+
+const isValidPdsPhotoDataUrl = (value) => {
+  if (typeof value !== 'string' || value.length > 7_000_000) return false;
+  const match = value.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!match) return false;
+  return Buffer.from(match[1], 'base64').length <= 5 * 1024 * 1024;
+};
+
+const isValidProfilePhotoDataUrl = (value) => {
+  if (typeof value !== 'string' || value.length > 7_000_000) return false;
+  const match = value.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!match) return false;
+  return Buffer.from(match[1], 'base64').length <= 5 * 1024 * 1024;
+};
+
+const STAFF_PROFILE_REQUEST_FIELDS = [
+  'name',
+  'email',
+  'position',
+  'department',
+  'phone',
+  'dateOfBirth',
+  'sexAtBirth',
+  'dateHired',
+  'placeOfBirth',
+  'tinNumber',
+  'businessPartnerNumber',
+  'philhealthNo',
+  'pagibigNo',
+  'maritalStatus',
+  'address',
+  'employmentStatus',
+  'lengthOfService',
+  'monthlyBasicSalary',
+  'peraRata',
+  'grossSalary',
+  'pendingAdministrativeCase',
+  'pendingCriminalCase',
+  'salaryGrade',
+  'profilePhotoDataUrl',
+];
+
+const normalizeStaffProfileRequestFields = (payload) => {
+  const fields = {};
+  const allowedFields = new Set(STAFF_PROFILE_REQUEST_FIELDS);
+
+  for (const [field, rawValue] of Object.entries(payload || {})) {
+    if (!allowedFields.has(field)) continue;
+
+    if (field === 'dateOfBirth' || field === 'dateHired') {
+      if (rawValue === '' || rawValue === null) {
+        fields[field] = null;
+      } else {
+        const date = new Date(rawValue);
+        if (Number.isNaN(date.getTime())) {
+          return { error: `${field} must be a valid date` };
+        }
+        fields[field] = date;
+      }
+      continue;
+    }
+
+    if (field === 'monthlyBasicSalary' || field === 'grossSalary') {
+      if (rawValue === '' || rawValue === null) {
+        fields[field] = null;
+      } else {
+        const amount = Number(rawValue);
+        if (!Number.isFinite(amount) || amount < 0) {
+          return { error: `${field} must be a non-negative number` };
+        }
+        fields[field] = amount;
+      }
+      continue;
+    }
+
+    if (field === 'pendingAdministrativeCase' || field === 'pendingCriminalCase') {
+      if (rawValue === '' || rawValue === null) {
+        fields[field] = null;
+      } else if (rawValue === true || rawValue === 'true') {
+        fields[field] = true;
+      } else if (rawValue === false || rawValue === 'false') {
+        fields[field] = false;
+      } else {
+        return { error: `${field} must be true or false` };
+      }
+      continue;
+    }
+
+    if (field === 'sexAtBirth' && !['', 'Male', 'Female'].includes(rawValue)) {
+      return { error: 'Sex must be Male or Female, or left blank.' };
+    }
+
+    if (field === 'profilePhotoDataUrl') {
+      if (rawValue && !isValidProfilePhotoDataUrl(rawValue)) {
+        return { error: 'Profile photo must be a JPG, PNG, or WebP image up to 5 MB.' };
+      }
+      fields[field] = rawValue || '';
+      continue;
+    }
+
+    if (field === 'department') {
+      if (rawValue === '' || rawValue === null) {
+        fields[field] = null;
+      } else if (typeof rawValue !== 'string' || !DEPARTMENTS.includes(rawValue)) {
+        return { error: 'Department must be selected from the available departments.' };
+      } else {
+        fields[field] = rawValue;
+      }
+      continue;
+    }
+
+    if (typeof rawValue !== 'string' && rawValue !== null) {
+      return { error: `${field} must be text` };
+    }
+    fields[field] = String(rawValue ?? '').trim();
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return { error: 'At least one profile field is required to submit a request' };
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, 'name') && !fields.name) {
+    return { error: 'Name is required' };
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, 'email') && !fields.email) {
+    return { error: 'Email is required' };
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, 'email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) {
+    return { error: 'Email must be a valid email address' };
+  }
+
+  return { fields };
+};
+
+const dpcrfScaleRowSchema = new mongoose.Schema({
+  scale: { type: Number, enum: [5, 4, 3, 2, 1], required: true },
+  quality: { type: String, default: '' },
+  efficiency: { type: String, default: '' },
+  timeliness: { type: String, default: '' },
+}, { _id: false });
+
+const dpcrfBlockSchema = new mongoose.Schema({
+  mfo: { type: String, default: '' },
+  kra: { type: String, default: '' },
+  objective: { type: String, default: '' },
+  timeLine: { type: String, default: '' },
+  weightKra: { type: String, default: '' },
+  rows: { type: [dpcrfScaleRowSchema], default: [] },
+  actualResults: {
+    q: { type: String, default: '' },
+    e: { type: String, default: '' },
+    t: { type: String, default: '' },
+    average: { type: String, default: '' },
+  },
+  meansOfVerification: {
+    imageDataUrl: { type: String, default: '' },
+    imageName: { type: String, default: '' },
+    mimeType: { type: String, default: '' },
+  },
+}, { _id: false });
+
+const dpcrfPartISectionSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  blocks: { type: [dpcrfBlockSchema], default: [] },
+}, { _id: false });
+
+const dpcrfSubmissionSchema = new mongoose.Schema({
+  submissionId: { type: String, required: true, unique: true },
+  ownerStaffId: { type: String, required: true, index: true },
+  ownerEmail: { type: String, required: true, trim: true, lowercase: true, index: true },
+  ownerName: { type: String, required: true },
+  ownerDepartment: { type: String, default: '' },
+  year: { type: Number, required: true, index: true },
+  partI: {
+    sections: { type: [dpcrfPartISectionSchema], default: [] },
+  },
+  partII: {
+    ratings: { type: mongoose.Schema.Types.Mixed, default: {} },
+  },
+  status: {
+    type: String,
+    enum: ['Submitted'],
+    default: 'Submitted',
+  },
+  partISubmitted: { type: Boolean, default: true },
+  partIISubmitted: { type: Boolean, default: false },
+  partISubmittedAt: { type: Date, default: Date.now },
+  partIISubmittedAt: { type: Date, default: null },
+  isSubmitted: { type: Boolean, default: true },
+  submittedAt: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+dpcrfSubmissionSchema.index({ ownerStaffId: 1, year: 1 }, { unique: true });
+
+const dpcrfPermissionSchema = new mongoose.Schema({
+  year: { type: Number, required: true, unique: true, index: true },
+  allowUpdate: { type: Boolean, default: false },
+  lockMode: {
+    type: String,
+    enum: ['manual', 'days', 'weeks', 'months'],
+    default: 'manual',
+  },
+  durationValue: { type: Number, default: null },
+  expiresAt: { type: Date, default: null },
+  updatedBy: { type: String, default: '' },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const spmsCalendarRowSchema = new mongoose.Schema({
+  order: { type: Number, required: true },
+  activity: { type: String, default: '' },
+  january: { type: String, default: '' },
+  february: { type: String, default: '' },
+  march: { type: String, default: '' },
+  april: { type: String, default: '' },
+  may: { type: String, default: '' },
+  june: { type: String, default: '' },
+  july: { type: String, default: '' },
+  august: { type: String, default: '' },
+  september: { type: String, default: '' },
+  october: { type: String, default: '' },
+  november: { type: String, default: '' },
+  december: { type: String, default: '' },
+  responsibleOfficeActors: { type: String, default: '' },
+}, { _id: false });
+
+const spmsCalendarSchema = new mongoose.Schema({
+  year: { type: Number, required: true, unique: true, index: true },
+  rows: { type: [spmsCalendarRowSchema], default: [] },
+  preparedByName: { type: String, default: '' },
+  preparedByTitle: { type: String, default: '' },
+  approvedByName: { type: String, default: '' },
+  approvedByTitle: { type: String, default: '' },
+  updatedBy: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+const vaultFolderSchema = new mongoose.Schema({
+  folderId: { type: String, required: true, unique: true },
+  ownerStaffId: { type: String, required: true, index: true },
+  ownerEmail: { type: String, index: true, trim: true, lowercase: true },
+  name: { type: String, required: true, trim: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+vaultFolderSchema.index({ ownerStaffId: 1, name: 1 }, { unique: true });
+
+const vaultFileSchema = new mongoose.Schema({
+  fileId: { type: String, required: true, unique: true },
+  ownerStaffId: { type: String, required: true, index: true },
+  ownerEmail: { type: String, index: true, trim: true, lowercase: true },
+  folder: { type: String, required: true, default: VAULT_DEFAULT_FOLDER },
+  name: { type: String, required: true, trim: true },
+  mimeType: { type: String, default: 'application/octet-stream' },
+  size: { type: Number, default: 0 },
+  storagePath: { type: String, required: true },
+  originalName: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+vaultFileSchema.index({ ownerStaffId: 1, folder: 1, createdAt: -1 });
+
+const monthlyAccrualExclusionSchema = new mongoose.Schema({
+  staffId: { type: String, required: true, index: true },
+  monthKey: { type: String, required: true },
+  reason: { type: String, default: 'ManualDelete' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+monthlyAccrualExclusionSchema.index({ staffId: 1, monthKey: 1 }, { unique: true });
+
 
 const Staff = mongoose.model('Staff', staffSchema);
+const StaffUpdateRequest = mongoose.model('StaffUpdateRequest', staffUpdateRequestSchema);
 const Leave = mongoose.model('Leave', leaveSchema);
 const TravelOrder = mongoose.model('TravelOrder', travelOrderSchema);
 const Overtime = mongoose.model('Overtime', overtimeSchema);
+const COE = mongoose.model('COE', coeSchema);
+const NoPendencyRequest = mongoose.model('NoPendencyRequest', noPendencyRequestSchema);
+const NoLeaveWithoutPayCertificate = mongoose.model(
+  'NoLeaveWithoutPayCertificate',
+  noLeaveWithoutPayCertificateSchema
+);
 const ServiceRecord = mongoose.model('ServiceRecord', serviceRecordSchema);
 const LeaveRecord = mongoose.model('LeaveRecord', leaveRecordSchema);
 const SystemLog = mongoose.model('SystemLog', systemLogSchema);
 const PersonalDataSheet = mongoose.model('PersonalDataSheet', personalDataSheetSchema);
+const PdsAwardee = mongoose.model('PdsAwardee', pdsAwardeeSchema);
+const SpecialOrderCounter = mongoose.model('SpecialOrderCounter', specialOrderCounterSchema);
+
+const getNextSpecialOrderNumber = async (year) => {
+  try {
+    const counter = await SpecialOrderCounter.findOneAndUpdate(
+      { year },
+      { $inc: { sequence: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    return String(counter.sequence).padStart(3, '0');
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    const counter = await SpecialOrderCounter.findOneAndUpdate(
+      { year },
+      { $inc: { sequence: 1 } },
+      { new: true }
+    );
+    if (!counter) throw error;
+    return String(counter.sequence).padStart(3, '0');
+  }
+};
+
+async function resolveProfilePhotoDataUrl(staff) {
+  if (staff.profilePhotoDataUrl) return staff.profilePhotoDataUrl;
+  if (!staff.email) return '';
+
+  const email = String(staff.email).trim().toLowerCase();
+  const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pdsWithPhoto = await PersonalDataSheet.findOne({
+    photoDataUrl: { $exists: true, $ne: '' },
+    $or: [
+      { ownerEmail: new RegExp(`^${escapedEmail}$`, 'i') },
+      { email: new RegExp(`^${escapedEmail}$`, 'i') },
+    ],
+  }).sort({ createdAt: -1 }).select('photoDataUrl').lean();
+  return pdsWithPhoto?.photoDataUrl || '';
+}
+
+async function resolveStaffPdsProfile(staff) {
+  const staffId = String(staff.id || '').trim();
+  const email = String(staff.email || '').trim();
+  const ownerFilters = [];
+  if (staffId) ownerFilters.push({ ownerStaffId: staffId });
+  if (email) {
+    const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const emailPattern = new RegExp(`^${escapedEmail}$`, 'i');
+    ownerFilters.push(
+      { ownerEmail: emailPattern },
+      {
+        $and: [
+          { ownerEmail: { $in: [null, ''] } },
+          { email: emailPattern },
+        ],
+      }
+    );
+  }
+  if (!ownerFilters.length) return null;
+
+  const pdsRecords = await PersonalDataSheet.find({
+    $and: [
+      { $or: ownerFilters },
+      { submittedOnBehalf: { $ne: true } },
+    ],
+  }).sort({ createdAt: -1 }).select('dateOfBirth').limit(50).lean();
+
+  return { dateOfBirth: pdsRecords[0]?.dateOfBirth || null };
+}
+
+const jobPostingSchema = new mongoose.Schema({
+  postingId: { type: String, required: true, unique: true },
+  placeOfAssignment: { type: String, required: true, trim: true },
+  positionTitle: { type: String, required: true, trim: true },
+  plantillaItemNumber: { type: String, required: true, trim: true },
+  salaryJobPayGrade: { type: String, required: true, trim: true },
+  monthlySalary: { type: String, required: true, trim: true },
+  eligibility: { type: [String], required: true, validate: [(entries) => entries.length > 0, 'At least one eligibility requirement is required.'] },
+  education: { type: String, required: true, trim: true },
+  training: { type: String, required: true, trim: true },
+  workExperience: { type: String, required: true, trim: true },
+  competency: { type: String, required: true, trim: true },
+  status: { type: String, enum: ['Published', 'Closed'], default: 'Published', index: true },
+  createdBy: String,
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+const announcementSchema = new mongoose.Schema({
+  announcementId: { type: String, required: true, unique: true },
+  title: { type: String, required: true, trim: true, maxlength: 160 },
+  category: { type: String, required: true, trim: true, maxlength: 60 },
+  content: { type: String, required: true, trim: true, maxlength: 10000 },
+  linkUrl: { type: String, trim: true, maxlength: 2048, default: '' },
+  linkLabel: { type: String, trim: true, maxlength: 80, default: '' },
+  expiresAt: { type: Date, default: null },
+  status: { type: String, enum: ['Published', 'Archived'], default: 'Published', index: true },
+  createdBy: String,
+  createdAt: { type: Date, default: Date.now, index: true },
+  updatedAt: { type: Date, default: Date.now },
+});
+const JobPosting = mongoose.model('JobPosting', jobPostingSchema);
+const Announcement = mongoose.model('Announcement', announcementSchema);
+const DPCRFSubmission = mongoose.model('DPCRFSubmission', dpcrfSubmissionSchema);
+const DPCRFPermission = mongoose.model('DPCRFPermission', dpcrfPermissionSchema);
+const SpmsCalendar = mongoose.model('SpmsCalendar', spmsCalendarSchema);
+const VaultFolder = mongoose.model('VaultFolder', vaultFolderSchema);
+const VaultFile = mongoose.model('VaultFile', vaultFileSchema);
+const MonthlyAccrualExclusion = mongoose.model('MonthlyAccrualExclusion', monthlyAccrualExclusionSchema);
+
+const ensureDefaultCredentials = async () => {
+  const isEnabled = String(process.env.ENABLE_DEFAULT_CREDENTIALS || '').toLowerCase() === 'true';
+  if (!isEnabled) {
+    return;
+  }
+
+  const defaultId = String(process.env.DEFAULT_CREDENTIALS_STAFF_ID || 'HADMIN001').trim();
+  const defaultName = String(process.env.DEFAULT_CREDENTIALS_NAME || 'HR Administrator').trim();
+  const defaultEmail = String(process.env.DEFAULT_CREDENTIALS_EMAIL || 'admin@lgu.gov').trim().toLowerCase();
+  const defaultPassword = String(process.env.DEFAULT_CREDENTIALS_PASSWORD || 'Admin_0');
+  const requestedRole = normalizeRole(process.env.DEFAULT_CREDENTIALS_ROLE || ROLES.ADMIN_HR);
+  const defaultRole = Object.values(ROLES).includes(requestedRole) ? requestedRole : ROLES.ADMIN_HR;
+  const requestedDepartment = String(process.env.DEFAULT_CREDENTIALS_DEPARTMENT || '').trim();
+  const defaultDepartment = requestedDepartment || null;
+
+  if (!defaultId || !defaultName || !defaultEmail || !defaultPassword) {
+    console.warn('Default credentials are enabled but one or more required fields are empty. Skipping bootstrap account creation.');
+    return;
+  }
+
+  if (ROLES_WITH_DEPARTMENTS.includes(defaultRole)) {
+    if (!defaultDepartment || !DEPARTMENTS.includes(defaultDepartment)) {
+      console.warn('Default credentials role requires a valid department. Set DEFAULT_CREDENTIALS_DEPARTMENT to a supported value.');
+      return;
+    }
+  }
+
+  try {
+    const existingStaff = await Staff.findOne({
+      $or: [{ id: defaultId }, { email: defaultEmail }],
+    });
+
+    if (existingStaff) {
+      console.log(`Default credentials account already exists for ${defaultEmail}`);
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    await Staff.create({
+      id: defaultId,
+      name: defaultName,
+      email: defaultEmail,
+      password: hashedPassword,
+      role: defaultRole,
+      position: process.env.DEFAULT_CREDENTIALS_POSITION || 'HR Administrator',
+      department: ROLES_WITH_DEPARTMENTS.includes(defaultRole) ? defaultDepartment : null,
+      isApproved: true,
+      isActive: true,
+      approvedAt: Date.now(),
+      approvedBy: 'System (Default Credentials)',
+    });
+
+    console.log(`Default credentials account created for ${defaultEmail}`);
+  } catch (error) {
+    console.error('Error creating default credentials account:', error.message);
+  }
+};
 
 const MONTHLY_EARNED_LEAVE_VALUE = 1.25;
 const EARNED_LEAVE_PARTICULARS = 'Earned Leave';
-const AUTO_DEDUCT_VL_TYPES = new Set(['Vacation Leave', 'Vacation']);
+const AUTO_DEDUCT_VL_TYPES = new Set(['Vacation Leave', 'Vacation', 'Monetization']);
 const AUTO_DEDUCT_SL_TYPES = new Set(['Sick Leave']);
 const AUTO_DEDUCT_TARDY_TYPES = new Set(['Tardy']);
 const AUTO_DEDUCT_UNDERTIME_TYPES = new Set(['Undertime']);
@@ -719,6 +1748,7 @@ const resolveAutoDeductLeaveType = (value) => {
   const typeKey = normalizeLeaveTypeKey(value);
 
   const vacationTypeKeys = new Set(['vacationleave', 'vacation', 'vl']);
+  const wellnessTypeKeys = new Set(['wellness', 'wellnessleave']);
   const sickTypeKeys = new Set(['sickleave', 'sick', 'sl']);
   // Remove Force Leave from calculation set
   const tardyTypeKeys = new Set(['tardy']);
@@ -729,6 +1759,9 @@ const resolveAutoDeductLeaveType = (value) => {
 
   if (vacationTypeKeys.has(typeKey)) {
     return 'Vacation Leave';
+  }
+  if (wellnessTypeKeys.has(typeKey)) {
+    return 'Wellness';
   }
   if (sickTypeKeys.has(typeKey)) {
     return 'Sick Leave';
@@ -826,19 +1859,18 @@ const upsertApprovedLeaveToLeaveRecord = async (leaveDoc) => {
 
   const normalizedLeaveType = String(leaveDoc.leaveType || '').trim();
   const canonicalLeaveType = resolveAutoDeductLeaveType(normalizedLeaveType);
-  const appliesToVl = canonicalLeaveType === 'Vacation Leave' || AUTO_DEDUCT_VL_TYPES.has(normalizedLeaveType);
+  const isForceLeave = normalizeLeaveTypeKey(normalizedLeaveType) === 'mandatoryforceleave';
+  const isWellnessLeave = normalizeLeaveTypeKey(normalizedLeaveType) === 'wellness';
+  const appliesToVl = canonicalLeaveType === 'Vacation Leave'
+    || AUTO_DEDUCT_VL_TYPES.has(normalizedLeaveType)
+    || isForceLeave
+    || isWellnessLeave;
   const appliesToSl = canonicalLeaveType === 'Sick Leave' || AUTO_DEDUCT_SL_TYPES.has(normalizedLeaveType);
   const appliesToTardy = canonicalLeaveType === 'Tardy' || AUTO_DEDUCT_TARDY_TYPES.has(normalizedLeaveType);
   const appliesToUndertime = canonicalLeaveType === 'Undertime' || AUTO_DEDUCT_UNDERTIME_TYPES.has(normalizedLeaveType);
-  // Force Leave is not included in calculations, only logged
-
   // Only log leave record for non-calculated types, but do not return null
 
-  const existing = await LeaveRecord.findOne({ sourceLeaveId: leaveDoc.leaveId }).select('_id').lean();
-  if (existing) {
-    console.warn(`[LeaveRecord] Skipped creation: LeaveRecord already exists for leaveId=${leaveDoc.leaveId}, type=${leaveDoc.leaveType}`);
-    return null;
-  }
+  const existing = await LeaveRecord.findOne({ sourceLeaveId: leaveDoc.leaveId });
 
   const numberOfDays = calculateLeaveDays(leaveDoc);
   if (numberOfDays <= 0) {
@@ -857,11 +1889,9 @@ const upsertApprovedLeaveToLeaveRecord = async (leaveDoc) => {
     period = null;
   }
 
-  // Only VL, SL, Tardy, Undertime, and Force Leave are calculated in ABSENT/UNDERTIME/WITH PAY
-  // Others are just logged (vlAbsentUndertimeWPay and slAbsentUndertimeWPay remain 0)
+  // Force Leave, Wellness, and Monetization are charged to Vacation Leave.
   let vlAbsentUndertimeWPay = 0;
   let slAbsentUndertimeWPay = 0;
-  // Only VL, SL, Tardy, and Undertime are included in calculations
   if (appliesToVl || appliesToTardy || appliesToUndertime) {
     vlAbsentUndertimeWPay = numberOfDays;
   } else if (appliesToSl) {
@@ -882,8 +1912,7 @@ const upsertApprovedLeaveToLeaveRecord = async (leaveDoc) => {
     dateRanges = [{ from: leaveDoc.startDate, to: leaveDoc.startDate }];
   }
 
-  const autoRecord = new LeaveRecord({
-    recordId: `LR-LEAVE-${leaveDoc.leaveId}`,
+  const recordPayload = {
     staffId: leaveDoc.staffId,
     staffName: leaveDoc.staffName || 'N/A',
     period,
@@ -899,6 +1928,22 @@ const upsertApprovedLeaveToLeaveRecord = async (leaveDoc) => {
     sourceLeaveId: leaveDoc.leaveId,
     autoGenerated: true,
     updatedAt: Date.now(),
+  };
+
+  if (existing) {
+    if (existing.autoGenerated) {
+      Object.assign(existing, recordPayload);
+      await existing.save();
+      return existing;
+    }
+
+    console.warn(`[LeaveRecord] Skipped update: manual LeaveRecord exists for leaveId=${leaveDoc.leaveId}, type=${leaveDoc.leaveType}`);
+    return null;
+  }
+
+  const autoRecord = new LeaveRecord({
+    recordId: `LR-LEAVE-${leaveDoc.leaveId}`,
+    ...recordPayload,
   });
 
   try {
@@ -923,7 +1968,7 @@ const ensureMonthlyEarnedLeaveCredits = async ({ staffId = null, upToDate = new 
     : { isApproved: true };
 
   const staffList = await Staff.find(staffFilter)
-    .select('id name dateHired createdAt')
+    .select('id name createdAt')
     .lean();
 
   let totalCreated = 0;
@@ -932,16 +1977,28 @@ const ensureMonthlyEarnedLeaveCredits = async ({ staffId = null, upToDate = new 
   for (const staff of staffList) {
     if (!staff?.id) continue;
 
-    const basisDate = staff.dateHired || staff.createdAt || new Date();
-    let cursor = getMonthStart(basisDate);
+    const basisDate = staff.createdAt || new Date();
+    const firstEligibleMonthStart = getMonthStart(basisDate);
+    let cursor = firstEligibleMonthStart;
 
     if (cursor > finalMonthStart) {
       continue;
     }
 
+    // Remove only legacy auto-accrual rows generated before account creation month.
+    await LeaveRecord.deleteMany({
+      staffId: staff.id,
+      particulars: EARNED_LEAVE_PARTICULARS,
+      source: 'MonthlyAccrual',
+      autoGenerated: true,
+      period: { $lt: firstEligibleMonthStart },
+    });
+
     const existingAccruals = await LeaveRecord.find({
       staffId: staff.id,
       particulars: EARNED_LEAVE_PARTICULARS,
+      source: 'MonthlyAccrual',
+      period: { $gte: firstEligibleMonthStart },
     })
       .select('period -_id')
       .lean();
@@ -952,11 +2009,23 @@ const ensureMonthlyEarnedLeaveCredits = async ({ staffId = null, upToDate = new 
         .filter(Boolean)
     );
 
+    const excludedAccruals = await MonthlyAccrualExclusion.find({
+      staffId: staff.id,
+    })
+      .select('monthKey -_id')
+      .lean();
+
+    const excludedMonthKeys = new Set(
+      excludedAccruals
+        .map((entry) => String(entry.monthKey || '').trim())
+        .filter(Boolean)
+    );
+
     const recordsToInsert = [];
 
     while (cursor <= finalMonthStart) {
       const monthKey = getMonthKey(cursor);
-      if (monthKey && !existingMonthKeys.has(monthKey)) {
+      if (monthKey && !existingMonthKeys.has(monthKey) && !excludedMonthKeys.has(monthKey)) {
         const monthEnd = getMonthEnd(cursor.getFullYear(), cursor.getMonth());
         recordsToInsert.push({
           recordId: `LR-EARNED-${staff.id}-${monthKey}`,
@@ -1027,6 +2096,8 @@ const dropLegacyTravelControlNoUniqueIndex = async () => {
 };
 
 mongoose.connection.once('open', () => {
+  ensureDefaultCredentials();
+
   dropLegacyTravelControlNoUniqueIndex();
 
   runLeaveRecordAutomations().catch((error) => {
@@ -1217,7 +2288,18 @@ app.post('/system-logs', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMI
 
 // Register
 app.post('/auth/register', async (req, res) => {
-  const { id, name, email, password, role, position, department, phone, dateOfBirth, placeOfBirth, tinNumber } = req.body;
+  const { id, name, email, password, role, position, department, phone, dateOfBirth, dateHired, placeOfBirth, tinNumber } = req.body;
+  const profileFields = normalizeStaffProfileFields(req.body);
+  if (profileFields.error) {
+    return res.status(400).json({ message: profileFields.error });
+  }
+  let normalizedDateHired;
+  if (dateHired !== undefined && dateHired !== null && String(dateHired).trim() !== '') {
+    normalizedDateHired = new Date(dateHired);
+    if (Number.isNaN(normalizedDateHired.getTime())) {
+      return res.status(400).json({ message: 'Invalid Date of Employment value' });
+    }
+  }
 
   if (!id || !name || !email || !password) {
     return res.status(400).json({ message: 'ID, name, email, and password are required' });
@@ -1226,7 +2308,7 @@ app.post('/auth/register', async (req, res) => {
   try {
     const existing = await Staff.findOne({ $or: [{ id }, { email }] });
     if (existing) {
-      return res.status(409).json({ message: 'Staff ID or email already exists' });
+      return res.status(409).json({ message: 'Item Number or email already exists' });
     }
 
     // Validate role
@@ -1271,8 +2353,15 @@ app.post('/auth/register', async (req, res) => {
       department: ROLES_WITH_DEPARTMENTS.includes(userRole) ? department : null,
       phone,
       dateOfBirth,
+      dateHired: normalizedDateHired,
       placeOfBirth,
       tinNumber,
+      businessPartnerNumber,
+      philhealthNo,
+      pagibigNo,
+      maritalStatus,
+      ...profileFields.fields,
+      lengthOfService: calculateStaffLengthOfService(normalizedDateHired),
       isApproved: isAutoApproved,
       approvedAt: isAutoApproved ? Date.now() : null,
       approvedBy: isAutoApproved ? 'System (Auto-approved)' : null
@@ -1403,6 +2492,7 @@ app.post('/auth/login', async (req, res) => {
       },
     });
 
+    const profilePhotoDataUrl = await resolveProfilePhotoDataUrl(staff);
     res.json({
       message: 'Login successful',
       token,
@@ -1415,6 +2505,8 @@ app.post('/auth/login', async (req, res) => {
         position: staff.position,
         department: staff.department,
         phone: staff.phone,
+        profilePhotoDataUrl,
+        sexAtBirth: staff.sexAtBirth || '',
         role: roleForToken,
       },
     });
@@ -1428,8 +2520,21 @@ app.post('/auth/login', async (req, res) => {
 app.get('/auth/me', verifyToken, async (req, res) => {
   try {
     const staff = await Staff.findOne({ id: req.user.staffId }).select('-password');
-    res.json(staff);
+    if (!staff) return res.status(404).json({ message: 'User account not found.' });
+
+    const [profilePhotoDataUrl, pdsProfile] = await Promise.all([
+      resolveProfilePhotoDataUrl(staff),
+      resolveStaffPdsProfile(staff),
+    ]);
+
+    res.json({
+      ...staff.toObject(),
+      profilePhotoDataUrl,
+      sexAtBirth: staff.sexAtBirth || '',
+      dateOfBirth: staff.dateOfBirth || pdsProfile?.dateOfBirth || null,
+    });
   } catch (error) {
+    console.error('Error fetching current user info:', error);
     res.status(500).json({ message: 'Failed to fetch user info' });
   }
 });
@@ -1461,6 +2566,294 @@ app.post('/auth/logout', verifyToken, async (req, res) => {
 
 // ==================== PERSONAL DATA SHEET ROUTES ====================
 
+const normalizeJobEligibility = (value) => {
+  const entries = Array.isArray(value) ? value : [value];
+  return entries.map((entry) => String(entry || '').trim()).filter(Boolean);
+};
+
+const isJobQualificationOptional = (value) => /^(n\/?a|none|not required|not applicable)$/i.test(String(value || '').trim());
+const normalizeJobQualificationText = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const JOB_EDUCATION_LEVELS = [
+  'Elementary level',
+  'Elementary graduate',
+  'High School level',
+  'High School graduate',
+  'Senior High School level',
+  'Senior High School graduate',
+  'Vocational / Trade Course',
+  'College level',
+  "Bachelor's degree",
+  "Master's degree",
+  'Doctorate degree',
+];
+
+const validateJobApplicationQualifications = (posting, answers) => {
+  const failures = [];
+  const eligibilityRequirements = normalizeJobEligibility(posting.eligibility);
+  const selectedEligibility = normalizeJobQualificationText(answers?.eligibility);
+
+  if (!selectedEligibility) {
+    failures.push('Select your eligibility.');
+  } else if (eligibilityRequirements.length > 0 && !eligibilityRequirements.some((entry) => normalizeJobQualificationText(entry) === selectedEligibility)) {
+    failures.push('Select an eligibility listed for this position.');
+  }
+
+  const educationRequirementRank = JOB_EDUCATION_LEVELS.findIndex(
+    (level) => normalizeJobQualificationText(level) === normalizeJobQualificationText(posting.education)
+  );
+  const applicantEducationRank = JOB_EDUCATION_LEVELS.findIndex(
+    (level) => normalizeJobQualificationText(level) === normalizeJobQualificationText(answers?.education)
+  );
+  if (educationRequirementRank < 0 || applicantEducationRank < educationRequirementRank) {
+    failures.push(`Education must meet or exceed ${posting.education || 'the posted requirement'}.`);
+  }
+
+  const validateYesNoOther = (field, requirement, label) => {
+    const choiceField = `${field}Choice`;
+    const otherField = `${field}Other`;
+    const choice = answers?.[choiceField];
+    const optional = isJobQualificationOptional(requirement);
+
+    if (!['Yes', 'No', 'Other'].includes(choice)) {
+      failures.push(`Select whether you meet the ${label} requirement.`);
+      return;
+    }
+    if (choice === 'Other') {
+      const other = normalizeJobQualificationText(answers?.[otherField]);
+      const normalizedRequirement = normalizeJobQualificationText(requirement);
+      if (!other) {
+        failures.push(`Enter details for your other ${label}.`);
+      } else if (!optional && !other.includes(normalizedRequirement)) {
+        failures.push(`The ${label} entered does not match the posted requirement.`);
+      }
+      return;
+    }
+    if (!optional && choice === 'No') {
+      failures.push(`You indicated that you do not meet the ${label} requirement.`);
+    }
+  };
+
+  validateYesNoOther('training', posting.training, 'training');
+  validateYesNoOther('workExperience', posting.workExperience, 'work experience');
+  return failures;
+};
+
+// Job Portal postings are visible to PDS applicants; only admins can manage them.
+app.get('/announcements', verifyTokenIfPresent, async (req, res) => {
+  try {
+    const now = new Date();
+    const filter = isSystemAdminRole(req.user?.role)
+      ? (req.query.status ? { status: String(req.query.status) } : {})
+      : { status: 'Published', $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] };
+    const announcements = await Announcement.find(filter).sort({ createdAt: -1 }).lean();
+    return res.json(announcements);
+  } catch (error) {
+    console.error('Error fetching announcements:', error);
+    return res.status(500).json({ message: 'Failed to fetch announcements.' });
+  }
+});
+
+app.post('/announcements', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  const category = String(req.body?.category || '').trim();
+  const content = String(req.body?.content || '').trim();
+  const linkUrl = String(req.body?.linkUrl || '').trim();
+  const linkLabel = String(req.body?.linkLabel || '').trim();
+  const expiryValue = String(req.body?.expiresAt || '').trim();
+
+  if (!title || title.length > 160) {
+    return res.status(400).json({ message: 'A title of 1 to 160 characters is required.' });
+  }
+  if (!category || category.length > 60) {
+    return res.status(400).json({ message: 'A category of 1 to 60 characters is required.' });
+  }
+  if (!content || content.length > 10000) {
+    return res.status(400).json({ message: 'Announcement content of 1 to 10,000 characters is required.' });
+  }
+  if (linkUrl && !/^https?:\/\/\S+$/i.test(linkUrl)) {
+    return res.status(400).json({ message: 'The announcement link must be a valid HTTP or HTTPS URL.' });
+  }
+  if (linkUrl.length > 2048 || linkLabel.length > 80) {
+    return res.status(400).json({ message: 'The announcement link or link label is too long.' });
+  }
+
+  let expiresAt = null;
+  if (expiryValue) {
+    expiresAt = new Date(`${expiryValue}T23:59:59.999Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(expiryValue)
+      || Number.isNaN(expiresAt.getTime())
+      || expiresAt.toISOString().slice(0, 10) !== expiryValue
+    ) {
+      return res.status(400).json({ message: 'Enter a valid announcement expiration date.' });
+    }
+  }
+
+  try {
+    const announcement = await Announcement.create({
+      announcementId: randomUUID(),
+      title,
+      category,
+      content,
+      linkUrl,
+      linkLabel,
+      expiresAt,
+      createdBy: req.user?.name || req.user?.email || 'Admin/HR',
+    });
+    return res.status(201).json({ announcement });
+  } catch (error) {
+    console.error('Error creating announcement:', error);
+    return res.status(500).json({ message: 'Failed to create announcement.' });
+  }
+});
+
+app.patch('/announcements/:announcementId/status', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const status = String(req.body?.status || '');
+  if (!['Published', 'Archived'].includes(status)) {
+    return res.status(400).json({ message: 'Status must be Published or Archived.' });
+  }
+
+  try {
+    const announcement = await Announcement.findOneAndUpdate(
+      { announcementId: req.params.announcementId },
+      { $set: { status, updatedAt: new Date() } },
+      { new: true, runValidators: true }
+    );
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found.' });
+    return res.json({ announcement });
+  } catch (error) {
+    console.error('Error updating announcement status:', error);
+    return res.status(500).json({ message: 'Failed to update announcement status.' });
+  }
+});
+
+app.delete('/announcements/:announcementId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const deleted = await Announcement.findOneAndDelete({ announcementId: req.params.announcementId });
+    if (!deleted) return res.status(404).json({ message: 'Announcement not found.' });
+    return res.json({ message: 'Announcement deleted.' });
+  } catch (error) {
+    console.error('Error deleting announcement:', error);
+    return res.status(500).json({ message: 'Failed to delete announcement.' });
+  }
+});
+
+app.get('/job-postings', verifyTokenIfPresent, async (req, res) => {
+  try {
+    const filter = isSystemAdminRole(req.user?.role)
+      ? (req.query.status ? { status: req.query.status } : {})
+      : { status: 'Published' };
+    const postings = await JobPosting.find(filter).sort({ createdAt: -1 }).lean();
+    res.json(postings);
+  } catch (error) {
+    console.error('Error fetching job postings:', error);
+    res.status(500).json({ message: 'Failed to fetch job postings' });
+  }
+});
+
+app.post('/job-postings', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const fields = [
+      'placeOfAssignment',
+      'positionTitle',
+      'plantillaItemNumber',
+      'salaryJobPayGrade',
+      'monthlySalary',
+      'education',
+      'training',
+      'workExperience',
+      'competency',
+    ];
+    const postingData = {};
+    for (const field of fields) {
+      postingData[field] = String(req.body?.[field] || '').trim();
+      if (!postingData[field]) {
+        return res.status(400).json({ message: `${field} is required.` });
+      }
+    }
+    postingData.eligibility = normalizeJobEligibility(req.body?.eligibility);
+    if (postingData.eligibility.length === 0) {
+      return res.status(400).json({ message: 'At least one eligibility requirement is required.' });
+    }
+    if (!JOB_EDUCATION_LEVELS.some((level) => normalizeJobQualificationText(level) === normalizeJobQualificationText(postingData.education))) {
+      return res.status(400).json({ message: 'Select a valid education requirement.' });
+    }
+
+    const postingCount = await JobPosting.countDocuments();
+    const postingId = `JOB-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(postingCount + 1).padStart(4, '0')}`;
+    const posting = await JobPosting.create({
+      ...postingData,
+      postingId,
+      status: 'Published',
+      createdBy: req.user?.email || req.user?.staffId || 'Admin',
+    });
+    res.status(201).json(posting);
+  } catch (error) {
+    console.error('Error creating job posting:', error);
+    res.status(500).json({ message: 'Failed to create job posting' });
+  }
+});
+
+app.patch('/job-postings/:postingId/status', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const status = String(req.body?.status || '');
+  if (!['Published', 'Closed'].includes(status)) {
+    return res.status(400).json({ message: 'Status must be Published or Closed.' });
+  }
+
+  try {
+    const posting = await JobPosting.findOneAndUpdate(
+      { postingId: req.params.postingId },
+      { $set: { status, updatedAt: new Date() } },
+      { new: true, runValidators: true }
+    );
+    if (!posting) return res.status(404).json({ message: 'Job posting not found.' });
+    res.json(posting);
+  } catch (error) {
+    console.error('Error updating job posting:', error);
+    res.status(500).json({ message: 'Failed to update job posting' });
+  }
+});
+
+app.get('/job-applications', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const filter = { 'jobApplication.postingId': { $exists: true, $ne: '' } };
+    if (req.query.status) filter['jobApplication.status'] = req.query.status;
+    const applications = await PersonalDataSheet.find(filter).sort({ createdAt: -1 }).lean();
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching job applications:', error);
+    res.status(500).json({ message: 'Failed to fetch job applications' });
+  }
+});
+
+app.patch('/job-applications/:pdsId/review', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const status = String(req.body?.status || '');
+  if (!['Approved', 'Disapproved'].includes(status)) {
+    return res.status(400).json({ message: 'Status must be Approved or Disapproved.' });
+  }
+
+  try {
+    const pds = await PersonalDataSheet.findOne({
+      pdsId: req.params.pdsId,
+      'jobApplication.postingId': { $exists: true, $ne: '' },
+    });
+    if (!pds) return res.status(404).json({ message: 'Job application not found.' });
+
+    pds.jobApplication = {
+      ...pds.jobApplication,
+      status,
+      remarks: String(req.body?.remarks || '').trim(),
+      reviewedBy: req.user?.email || req.user?.staffId || 'Admin',
+      reviewedAt: new Date(),
+    };
+    await pds.save();
+    res.json({ message: `Job application ${status.toLowerCase()}.`, pds });
+  } catch (error) {
+    console.error('Error reviewing job application:', error);
+    res.status(500).json({ message: 'Failed to review job application' });
+  }
+});
+
 // Submit PDS (public, but links to account when authenticated)
 app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
   const normalizeEmptyStrings = (value) => {
@@ -1484,6 +2877,50 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
   };
 
   const normalizedPayload = normalizeEmptyStrings(req.body);
+  if (!isValidPdsPhotoDataUrl(normalizedPayload.photoDataUrl)) {
+    return res.status(400).json({ message: 'A JPG, PNG, or WebP PDS photo up to 5 MB is required.' });
+  }
+
+  let jobApplication;
+  if (normalizedPayload.jobApplication?.postingId) {
+    let posting;
+    try {
+      posting = await JobPosting.findOne({
+        postingId: String(normalizedPayload.jobApplication.postingId),
+        status: 'Published',
+      }).lean();
+    } catch (error) {
+      console.error('Error validating selected job posting:', error);
+      return res.status(500).json({ message: 'Failed to validate the selected position.' });
+    }
+    if (!posting) {
+      return res.status(400).json({ message: 'The selected position is no longer available.' });
+    }
+    const applicantQualifications = normalizedPayload.jobApplication.applicantQualifications || {};
+    const qualificationFailures = validateJobApplicationQualifications(posting, applicantQualifications);
+    if (qualificationFailures.length > 0) {
+      return res.status(400).json({
+        message: 'The applicant does not meet all qualifications for this position.',
+        qualificationFailures,
+      });
+    }
+    jobApplication = {
+      postingId: posting.postingId,
+      placeOfAssignment: posting.placeOfAssignment,
+      positionTitle: posting.positionTitle,
+      plantillaItemNumber: posting.plantillaItemNumber,
+      salaryJobPayGrade: posting.salaryJobPayGrade,
+      monthlySalary: posting.monthlySalary,
+      eligibility: normalizeJobEligibility(posting.eligibility),
+      education: posting.education,
+      training: posting.training,
+      workExperience: posting.workExperience,
+      competency: posting.competency,
+      applicantQualifications,
+      status: 'Pending',
+      submittedAt: new Date(),
+    };
+  }
 
   // Helper: try to parse values that may have been stringified (JSON or JS-like)
   const parsePossiblyStringified = (val) => {
@@ -1502,6 +2939,30 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
         // eslint-disable-next-line no-new-func
         return Function('"use strict";return (' + trimmed + ')')();
       } catch (evalErr) {
+        // Last-chance recovery for malformed concatenated object-literal strings.
+        // Example input can look like: "[\n' + ' {\n' + \" title: 'LD 1' ... } ... ]"
+        // We extract each {...} block and normalize it into parseable JSON.
+        const objectBlocks = trimmed.match(/\{[\s\S]*?\}/g);
+        if (objectBlocks && objectBlocks.length > 0) {
+          try {
+            const parsedBlocks = objectBlocks.map((block) => {
+              const normalized = block
+                // Recover malformed concatenated fragments: ' + " ... " + '
+                .replace(/["']\s*\+\s*["']/g, '')
+                .replace(/["']\s*\+\s*/g, '')
+                .replace(/\s*\+\s*["']/g, '')
+                .replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
+                .replace(/'/g, '"')
+                .replace(/,\s*}/g, '}')
+                .replace(/,\s*]/g, ']');
+              return JSON.parse(normalized);
+            });
+            return trimmed.startsWith('[') ? parsedBlocks : parsedBlocks[0];
+          } catch (blockErr) {
+            return val;
+          }
+        }
+
         return val;
       }
     }
@@ -1515,7 +2976,43 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
     }
   };
 
+  const coerceArrayEntries = (fieldName) => {
+    const fieldValue = normalizedPayload[fieldName];
+    if (!Array.isArray(fieldValue)) return;
+
+    let changed = false;
+    const expanded = [];
+
+    fieldValue.forEach((item) => {
+      if (typeof item !== 'string') {
+        expanded.push(item);
+        return;
+      }
+
+      const parsed = parsePossiblyStringified(item);
+
+      if (Array.isArray(parsed)) {
+        expanded.push(...parsed);
+        changed = true;
+        return;
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        expanded.push(parsed);
+        changed = true;
+        return;
+      }
+
+      expanded.push(item);
+    });
+
+    if (changed) {
+      normalizedPayload[fieldName] = expanded;
+    }
+  };
+
   ['workExperience', 'voluntaryWork', 'learningDevelopment', 'specialSkills', 'distinctions', 'memberships', 'references'].forEach(coerceField);
+  ['workExperience', 'voluntaryWork', 'learningDevelopment', 'specialSkills', 'distinctions', 'memberships', 'references', 'civilServiceEligibilities', 'educationalBackground'].forEach(coerceArrayEntries);
 
   const {
     surname,
@@ -1526,12 +3023,22 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
     placeOfBirth,
     sexAtBirth,
     civilStatus,
+    height,
+    weight,
+    bloodType,
+    gsisNo,
+    pagibigNo,
+    philhealthNo,
+    sssNo,
+    tinNo,
+    agencyEmployeeNo,
     citizenship,
     residentialAddress,
     permanentAddress,
     telephone,
     mobile,
     email,
+    photoDataUrl,
     familyBackground,
     educationalBackground,
   } = normalizedPayload;
@@ -1579,6 +3086,78 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
     return address;
   };
 
+  const sanitizeLearningDevelopment = (value) => {
+    const inputArray = Array.isArray(value)
+      ? value
+      : (typeof value === 'string' ? [value] : []);
+
+    if (!inputArray.length) return [];
+
+    const normalizeLdObject = (item) => ({
+      title: item?.title ? String(item.title).trim() : '',
+      from: item?.from ? String(item.from).trim() : '',
+      to: item?.to ? String(item.to).trim() : '',
+      hours: item?.hours ? String(item.hours).trim() : '',
+      type: item?.type ? String(item.type).trim() : '',
+      conductedBy: item?.conductedBy ? String(item.conductedBy).trim() : '',
+    });
+
+    const parseLdEntriesFromString = (text) => {
+      if (typeof text !== 'string') return [];
+
+      const source = text
+        .replace(/\r/g, ' ')
+        .replace(/\\n/g, ' ')
+        .replace(/["']\s*\+\s*["']/g, ' ')
+        .replace(/["']\s*\+\s*/g, ' ')
+        .replace(/\s*\+\s*["']/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const objectBlocks = source.match(/\{[\s\S]*?\}/g);
+      const candidates = objectBlocks && objectBlocks.length > 0 ? objectBlocks : [source];
+
+      const parseOne = (chunk) => {
+        const pick = (key) => {
+          const match = chunk.match(new RegExp(`${key}\\s*:\\s*['\"]([^'\"]*)['\"]`, 'i'));
+          return match ? match[1].trim() : '';
+        };
+
+        const parsed = {
+          title: pick('title'),
+          from: pick('from'),
+          to: pick('to'),
+          hours: pick('hours'),
+          type: pick('type'),
+          conductedBy: pick('conductedBy'),
+        };
+
+        return Object.values(parsed).some(Boolean) ? parsed : null;
+      };
+
+      return candidates.map(parseOne).filter(Boolean);
+    };
+
+    const normalizedRows = [];
+
+    inputArray
+      .flatMap((item) => (Array.isArray(item) ? item : [item]))
+      .forEach((item) => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          normalizedRows.push(normalizeLdObject(item));
+          return;
+        }
+
+        if (typeof item === 'string') {
+          const parsedRows = parseLdEntriesFromString(item);
+          parsedRows.forEach((parsed) => normalizedRows.push(normalizeLdObject(parsed)));
+        }
+      });
+
+    // Never return raw strings to Mongoose; keep only normalized object rows.
+    return normalizedRows.filter((row) => row && typeof row === 'object' && !Array.isArray(row));
+  };
+
   try {
     const countToday = await PersonalDataSheet.countDocuments({
       createdAt: {
@@ -1594,7 +3173,48 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
     const authenticatedEmail = req.user?.email ? String(req.user.email).trim().toLowerCase() : undefined;
     const authenticatedName = req.user?.name ? String(req.user.name).trim() : undefined;
     const payloadEmail = email ? String(email).trim().toLowerCase() : undefined;
-    const shouldAutoApprove = Boolean(normalizedPayload.adminCreateRecord) && Boolean(req.user) && isSystemAdminRole(req.user.role);
+    const isAdminCreateRecord = Boolean(normalizedPayload.adminCreateRecord) && Boolean(req.user) && isSystemAdminRole(req.user.role);
+    const shouldAutoApprove = isAdminCreateRecord;
+
+    let latestOwnedPds = null;
+    if (req.user && !isAdminCreateRecord) {
+      const ownerEmailForLookup = authenticatedEmail || payloadEmail;
+
+      if (ownerEmailForLookup) {
+        const escapedOwnerEmail = ownerEmailForLookup.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ownerFilter = {
+          $and: [
+            {
+              $or: [
+                { ownerEmail: new RegExp(`^${escapedOwnerEmail}$`, 'i') },
+                { email: new RegExp(`^${escapedOwnerEmail}$`, 'i') },
+              ],
+            },
+            { submittedOnBehalf: { $ne: true } },
+          ],
+        };
+
+        latestOwnedPds = await PersonalDataSheet.findOne(ownerFilter)
+          .sort({ createdAt: -1 })
+          .select('status updatePermissionGranted')
+          .lean();
+
+        if (
+          latestOwnedPds
+          && /^\s*approved\s*$/i.test(String(latestOwnedPds.status || ''))
+        ) {
+          if (hasActivePdsUpdatePermission(latestOwnedPds)) {
+            return res.status(409).json({
+              message: 'Please update your existing approved PDS record instead of submitting a new one.',
+            });
+          }
+
+          return res.status(403).json({
+            message: 'Your approved PDS is locked. Please ask Admin/HR to grant update permission from the PDS record view.',
+          });
+        }
+      }
+    }
 
     // If the user is submitting a revised PDS, remove prior "For Revision" rows tied to the same account.
     const revisionRecordMatchers = [];
@@ -1616,8 +3236,24 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
       });
     }
 
+    let ownerEmail = authenticatedEmail || payloadEmail;
+    let submittedOnBehalf = false;
+
+    // Admin-created records from PDS Record are treated as on-behalf submissions.
+    // They should not appear in the admin submitter's "My PDS" view.
+    if (Boolean(normalizedPayload.adminCreateRecord) && Boolean(req.user) && isSystemAdminRole(req.user.role)) {
+      if (payloadEmail && authenticatedEmail && payloadEmail !== authenticatedEmail) {
+        submittedOnBehalf = true;
+        ownerEmail = payloadEmail;
+      }
+    }
+
+    const sanitizedLearningDevelopment = sanitizeLearningDevelopment(normalizedPayload.learningDevelopment);
+
     const pds = new PersonalDataSheet({
       pdsId,
+      ownerEmail,
+      submittedOnBehalf,
       submittedByStaffId: authenticatedStaffId,
       submittedByEmail: authenticatedEmail,
       submittedByName: authenticatedName,
@@ -1629,18 +3265,28 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
       placeOfBirth,
       sexAtBirth,
       civilStatus,
+      height,
+      weight,
+      bloodType,
+      gsisNo,
+      pagibigNo,
+      philhealthNo,
+      sssNo,
+      tinNo,
+      agencyEmployeeNo,
       citizenship: normalizedCitizenship,
       residentialAddress: normalizeAddress(residentialAddress),
       permanentAddress: normalizeAddress(permanentAddress),
       telephone,
       mobile,
       email,
+      photoDataUrl,
       familyBackground,
       educationalBackground,
       civilServiceEligibilities: normalizedPayload.civilServiceEligibilities || [],
       workExperience: normalizedPayload.workExperience || [],
       voluntaryWork: normalizedPayload.voluntaryWork || [],
-      learningDevelopment: normalizedPayload.learningDevelopment || [],
+      learningDevelopment: sanitizedLearningDevelopment,
       specialSkills: normalizedPayload.specialSkills || [],
       distinctions: normalizedPayload.distinctions || [],
       memberships: normalizedPayload.memberships || [],
@@ -1678,9 +3324,13 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
       status: shouldAutoApprove ? 'Approved' : 'Pending',
       reviewedBy: shouldAutoApprove ? (authenticatedName || 'System Admin') : undefined,
       reviewedAt: shouldAutoApprove ? Date.now() : undefined,
+      updatePermissionGranted: false,
+      updatePermissionGrantedAt: undefined,
+      updatePermissionGrantedBy: undefined,
     });
 
     await pds.save();
+
     res.status(201).json({ message: 'Personal Data Sheet submitted successfully', pds });
   } catch (error) {
     console.error('Error submitting PDS:', error);
@@ -1693,29 +3343,63 @@ app.post('/personal-data-sheets', verifyTokenIfPresent, async (req, res) => {
 
 app.get('/personal-data-sheets/my', verifyToken, async (req, res) => {
   try {
-    const tokenStaffId = String(req.user?.staffId || '').trim();
+    const tokenUserId = String(req.user?.id || '').trim();
     const tokenEmail = String(req.user?.email || '').trim().toLowerCase();
 
-    const accountMatchers = [];
-    if (tokenStaffId) {
-      accountMatchers.push({ submittedByStaffId: tokenStaffId });
-    }
-    if (tokenEmail) {
-      accountMatchers.push({ submittedByEmail: tokenEmail });
-      accountMatchers.push({ email: new RegExp(`^${tokenEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    // Resolve canonical account identity from Staff to avoid stale/missing token email claims.
+    let canonicalEmail = tokenEmail;
+    if (tokenUserId) {
+      const staffQuery = { _id: tokenUserId };
+      const currentStaff = await Staff.findOne(staffQuery).select('id email').lean();
+      if (currentStaff?.email) {
+        canonicalEmail = String(currentStaff.email).trim().toLowerCase();
+      }
     }
 
-    if (!accountMatchers.length) {
+    if (!canonicalEmail) {
       return res.json({ latestSubmission: null, approvedPds: null });
     }
 
-    const ownershipFilter = { $or: accountMatchers };
+    // Backfill legacy records that clearly belong to this user but were created before owner fields existed.
+    // Tight match requires submitter email == subject email to avoid adopting on-behalf records.
+    if (canonicalEmail) {
+      const escapedCanonicalEmail = canonicalEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      await PersonalDataSheet.updateMany(
+        {
+          ownerEmail: { $exists: false },
+          submittedByEmail: new RegExp(`^${escapedCanonicalEmail}$`, 'i'),
+          email: new RegExp(`^${escapedCanonicalEmail}$`, 'i'),
+          submittedOnBehalf: { $ne: true },
+        },
+        {
+          $set: {
+            ownerEmail: canonicalEmail,
+            submittedOnBehalf: false,
+          },
+        }
+      );
+    }
+
+    const escapedCanonicalEmail = canonicalEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const myPdsFilter = {
+      $and: [
+        {
+          $or: [
+            { ownerEmail: new RegExp(`^${escapedCanonicalEmail}$`, 'i') },
+            { email: new RegExp(`^${escapedCanonicalEmail}$`, 'i') },
+          ],
+        },
+        { submittedOnBehalf: { $ne: true } },
+      ],
+    };
+
+    const approvedStatusRegex = /^\s*approved\s*$/i;
 
     const [latestSubmission, approvedPds] = await Promise.all([
-      PersonalDataSheet.findOne(ownershipFilter).sort({ createdAt: -1 }),
+      PersonalDataSheet.findOne(myPdsFilter).sort({ createdAt: -1 }),
       PersonalDataSheet.findOne({
-        ...ownershipFilter,
-        status: 'Approved',
+        ...myPdsFilter,
+        status: approvedStatusRegex,
       }).sort({ reviewedAt: -1, createdAt: -1 }),
     ]);
 
@@ -1727,16 +3411,20 @@ app.get('/personal-data-sheets/my', verifyToken, async (req, res) => {
 });
 
 // Get PDS submissions (admin)
-app.get('/personal-data-sheets', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.get('/personal-data-sheets', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = {};
+    const filterParts = [];
 
     if (status && ['Pending', 'Approved', 'Disapproved', 'For Revision'].includes(status)) {
-      filter.status = status;
+      filterParts.push({ status });
     }
+    const managedStaff = await getDepartmentStaff(req.user);
+    if (managedStaff) filterParts.push(getPdsDepartmentFilter(managedStaff));
 
-    const sheets = await PersonalDataSheet.find(filter).sort({ createdAt: -1 });
+    const sheets = await PersonalDataSheet.find(filterParts.length ? { $and: filterParts } : {})
+      .select('-specialOrderNumberAttachment.storagePath')
+      .sort({ createdAt: -1 });
     res.json(sheets);
   } catch (error) {
     console.error('Error fetching PDS submissions:', error);
@@ -1744,8 +3432,227 @@ app.get('/personal-data-sheets', verifyToken, requireRole([ROLES.SUPER_ADMIN, RO
   }
 });
 
-// Update PDS submission (admin)
-app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.get('/personal-data-sheets/awardees', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  try {
+    const managedStaff = await getDepartmentStaff(req.user);
+    let awardeeFilter = {};
+    if (managedStaff) {
+      const managedPds = await PersonalDataSheet.find(getPdsDepartmentFilter(managedStaff)).select('pdsId').lean();
+      awardeeFilter = { sourcePdsId: { $in: managedPds.map((pds) => pds.pdsId).filter(Boolean) } };
+    }
+    const awardees = await PdsAwardee.find(awardeeFilter).sort({ createdAt: -1 }).lean();
+    res.json(awardees);
+  } catch (error) {
+    console.error('Error fetching PDS awardees:', error);
+    res.status(500).json({ message: 'Failed to fetch PDS awardees.' });
+  }
+});
+
+app.post('/personal-data-sheets/awardees', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const sourcePdsId = String(req.body?.sourcePdsId || '').trim();
+  const awardType = String(req.body?.awardType || '').trim();
+  if (!sourcePdsId || !awardType) {
+    return res.status(400).json({ message: 'PDS record and award type are required.' });
+  }
+
+  try {
+    const sourceRecord = await PersonalDataSheet.findOne({
+      pdsId: sourcePdsId,
+      status: 'Approved',
+    })
+      .select('-specialOrderNumberAttachment.storagePath')
+      .lean();
+    if (!sourceRecord) {
+      return res.status(404).json({ message: 'Approved PDS record not found.' });
+    }
+    if (!(await canManagePdsRecord(req.user, sourceRecord))) {
+      return res.status(403).json({ message: 'You can only add staff from your department to Awardee.' });
+    }
+
+    const { _id, __v, ...pdsSnapshot } = sourceRecord;
+    const awardee = await PdsAwardee.create({
+      awardeeId: randomUUID(),
+      sourcePdsId,
+      awardType,
+      pdsSnapshot,
+      createdBy: req.user?.staffId || req.user?.email || 'Admin/HR',
+    });
+
+    res.status(201).json({ awardee });
+  } catch (error) {
+    console.error('Error creating PDS awardee copy:', error);
+    res.status(500).json({ message: 'Failed to add record to Awardee.' });
+  }
+});
+
+app.delete('/personal-data-sheets/awardees/:awardeeId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  try {
+    const target = await PdsAwardee.findOne({ awardeeId: req.params.awardeeId }).select('sourcePdsId');
+    if (!target) {
+      return res.status(404).json({ message: 'Awardee record not found.' });
+    }
+    const sourceRecord = await PersonalDataSheet.findOne({ pdsId: target.sourcePdsId })
+      .select('ownerStaffId submittedByStaffId ownerEmail submittedByEmail email')
+      .lean();
+    if (!(await canManagePdsRecord(req.user, sourceRecord))) {
+      return res.status(403).json({ message: 'You can only remove Awardee records for staff in your department.' });
+    }
+    const deleted = await PdsAwardee.findOneAndDelete({ awardeeId: req.params.awardeeId });
+    if (!deleted) {
+      return res.status(404).json({ message: 'Awardee record not found.' });
+    }
+    res.json({ message: 'Awardee copy removed.' });
+  } catch (error) {
+    console.error('Error removing PDS awardee copy:', error);
+    res.status(500).json({ message: 'Failed to remove Awardee record.' });
+  }
+});
+
+app.put(
+  '/personal-data-sheets/:pdsId/separation-details',
+  verifyToken,
+  requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]),
+  async (req, res) => {
+    const allowedReasons = ['retirement', 'death', 'resignation', 'termination', 'drop-from-roles', 'transfer-to-other-agency'];
+    const separationReason = String(req.body?.separationReason || '');
+    const effectivityDateValue = String(req.body?.effectivityDate || '');
+    const effectivityDate = new Date(`${effectivityDateValue}T00:00:00.000Z`);
+
+    if (!allowedReasons.includes(separationReason)) {
+      return res.status(400).json({ message: 'Select a valid separated/retiree type.' });
+    }
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(effectivityDateValue)
+      || Number.isNaN(effectivityDate.getTime())
+      || effectivityDate.toISOString().slice(0, 10) !== effectivityDateValue
+    ) {
+      return res.status(400).json({ message: 'A valid effectivity date is required.' });
+    }
+
+    try {
+      const pds = await PersonalDataSheet.findOne({ pdsId: req.params.pdsId });
+      if (!pds) {
+        return res.status(404).json({ message: 'PDS record not found.' });
+      }
+      if (!(await canManagePdsRecord(req.user, pds))) {
+        return res.status(403).json({ message: 'You can only manage PDS records for staff in your department.' });
+      }
+
+      const ownerEmail = pds.ownerEmail || pds.email;
+      const staff = (
+        (ownerEmail ? await Staff.findOne({ email: String(ownerEmail).trim().toLowerCase() }).lean() : null)
+        || (pds.ownerStaffId ? await Staff.findOne({ id: pds.ownerStaffId }).lean() : null)
+      );
+      const now = new Date();
+      const year = Number(new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+      }).format(now));
+      const previousOrder = pds.separationOrder || {};
+      const preserveOrderNumber = Boolean(previousOrder.orderNumber && previousOrder.year === year);
+      const orderNumber = preserveOrderNumber
+        ? previousOrder.orderNumber
+        : await getNextSpecialOrderNumber(year);
+      const currentWork = (pds.workExperience || []).find((work) => (
+        !work?.to || ['present', 'current'].includes(String(work.to).trim().toLowerCase())
+      )) || pds.workExperience?.[0];
+      const monthlyCompensationCandidate = staff?.monthlyBasicSalary
+        ?? staff?.grossSalary
+        ?? pds.jobApplication?.monthlySalary;
+      const monthlyCompensation = Number.isFinite(Number(monthlyCompensationCandidate))
+        && monthlyCompensationCandidate !== null
+        && monthlyCompensationCandidate !== ''
+        ? Number(monthlyCompensationCandidate)
+        : null;
+      const position = [
+        currentWork?.positionTitle,
+        staff?.position,
+        pds.jobApplication?.positionTitle,
+      ].find((value) => value && String(value).trim().toLowerCase() !== 'n/a') || 'N/A';
+      const department = [
+        staff?.department,
+        pds.department,
+        pds.officeDepartment,
+        pds.jobApplication?.office,
+      ].find((value) => value && String(value).trim().toLowerCase() !== 'n/a') || 'N/A';
+      const fullName = [
+        pds.surname,
+        pds.firstName,
+        pds.middleName,
+        pds.nameExtension,
+      ].filter(Boolean).join(', ');
+
+      pds.recordCategory = 'separated-retirees';
+      pds.separationReason = separationReason;
+      pds.separationOrder = {
+        orderNumber,
+        year,
+        orderDate: preserveOrderNumber && previousOrder.orderDate ? previousOrder.orderDate : now,
+        fullName,
+        position,
+        department,
+        monthlyCompensation,
+        separationReason,
+        effectivityDate,
+      };
+      pds.effectivityDate = effectivityDate;
+      pds.updatedAt = now;
+      await pds.save();
+
+      const responsePds = pds.toObject();
+      if (responsePds.specialOrderNumberAttachment) {
+        delete responsePds.specialOrderNumberAttachment.storagePath;
+      }
+      res.json({ message: 'Separation Order generated.', pds: responsePds });
+    } catch (error) {
+      console.error('Error generating PDS Separation Order:', error);
+      res.status(500).json({ message: 'Failed to generate the Separation Order.' });
+    }
+  }
+);
+
+app.get(
+  '/personal-data-sheets/:pdsId/separation-order-attachment',
+  verifyToken,
+  requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]),
+  async (req, res) => {
+    try {
+      const pds = await PersonalDataSheet.findOne({ pdsId: req.params.pdsId })
+        .select('specialOrderNumberAttachment ownerStaffId submittedByStaffId ownerEmail submittedByEmail email')
+        .lean();
+      if (!pds) return res.status(404).json({ message: 'PDS record not found.' });
+      if (!(await canManagePdsRecord(req.user, pds))) {
+        return res.status(403).json({ message: 'You can only access PDS records for staff in your department.' });
+      }
+      const attachment = pds?.specialOrderNumberAttachment;
+      if (!attachment?.storagePath || !fs.existsSync(attachment.storagePath)) {
+        return res.status(404).json({ message: 'Special Order attachment not found.' });
+      }
+
+      res.type(attachment.mimeType);
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename*=UTF-8''${encodeURIComponent(attachment.fileName || 'special-order')}`
+      );
+      const stream = fs.createReadStream(attachment.storagePath);
+      stream.on('error', (error) => {
+        console.error('Error reading Special Order attachment:', error);
+        if (!res.headersSent) {
+          res.status(500).json({ message: 'Failed to read Special Order attachment.' });
+        } else {
+          res.destroy(error);
+        }
+      });
+      stream.pipe(res);
+    } catch (error) {
+      console.error('Error retrieving Special Order attachment:', error);
+      res.status(500).json({ message: 'Failed to retrieve Special Order attachment.' });
+    }
+  }
+);
+
+// Update PDS submission (admin, or owner when granted update permission)
+app.put('/personal-data-sheets/:pdsId', verifyToken, async (req, res) => {
   const { pdsId } = req.params;
 
   const normalizeEmptyStrings = (value) => {
@@ -1781,6 +3688,27 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
         // eslint-disable-next-line no-new-func
         return Function('"use strict";return (' + trimmed + ')')();
       } catch (evalErr) {
+        const objectBlocks = trimmed.match(/\{[\s\S]*?\}/g);
+        if (objectBlocks && objectBlocks.length > 0) {
+          try {
+            const parsedBlocks = objectBlocks.map((block) => {
+              const normalized = block
+                // Recover malformed concatenated fragments: ' + " ... " + '
+                .replace(/["']\s*\+\s*["']/g, '')
+                .replace(/["']\s*\+\s*/g, '')
+                .replace(/\s*\+\s*["']/g, '')
+                .replace(/([{,]\s*)([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
+                .replace(/'/g, '"')
+                .replace(/,\s*}/g, '}')
+                .replace(/,\s*]/g, ']');
+              return JSON.parse(normalized);
+            });
+            return trimmed.startsWith('[') ? parsedBlocks : parsedBlocks[0];
+          } catch (blockErr) {
+            return val;
+          }
+        }
+
         return val;
       }
     }
@@ -1814,14 +3742,127 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
     return address;
   };
 
+  const sanitizeLearningDevelopment = (value) => {
+    const inputArray = Array.isArray(value)
+      ? value
+      : (typeof value === 'string' ? [value] : []);
+
+    if (!inputArray.length) return [];
+
+    const normalizeLdObject = (item) => ({
+      title: item?.title ? String(item.title).trim() : '',
+      from: item?.from ? String(item.from).trim() : '',
+      to: item?.to ? String(item.to).trim() : '',
+      hours: item?.hours ? String(item.hours).trim() : '',
+      type: item?.type ? String(item.type).trim() : '',
+      conductedBy: item?.conductedBy ? String(item.conductedBy).trim() : '',
+    });
+
+    const parseLdEntriesFromString = (text) => {
+      if (typeof text !== 'string') return [];
+
+      const source = text
+        .replace(/\r/g, ' ')
+        .replace(/\\n/g, ' ')
+        .replace(/["']\s*\+\s*["']/g, ' ')
+        .replace(/["']\s*\+\s*/g, ' ')
+        .replace(/\s*\+\s*["']/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const objectBlocks = source.match(/\{[\s\S]*?\}/g);
+      const candidates = objectBlocks && objectBlocks.length > 0 ? objectBlocks : [source];
+
+      const parseOne = (chunk) => {
+        const pick = (key) => {
+          const match = chunk.match(new RegExp(`${key}\\s*:\\s*['\"]([^'\"]*)['\"]`, 'i'));
+          return match ? match[1].trim() : '';
+        };
+
+        const parsed = {
+          title: pick('title'),
+          from: pick('from'),
+          to: pick('to'),
+          hours: pick('hours'),
+          type: pick('type'),
+          conductedBy: pick('conductedBy'),
+        };
+
+        return Object.values(parsed).some(Boolean) ? parsed : null;
+      };
+
+      return candidates.map(parseOne).filter(Boolean);
+    };
+
+    const normalizedRows = [];
+
+    inputArray
+      .flatMap((item) => (Array.isArray(item) ? item : [item]))
+      .forEach((item) => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          normalizedRows.push(normalizeLdObject(item));
+          return;
+        }
+
+        if (typeof item === 'string') {
+          const parsedRows = parseLdEntriesFromString(item);
+          parsedRows.forEach((parsed) => normalizedRows.push(normalizeLdObject(parsed)));
+        }
+      });
+
+    // Never return raw strings to Mongoose; keep only normalized object rows.
+    return normalizedRows.filter((row) => row && typeof row === 'object' && !Array.isArray(row));
+  };
+
   try {
     const normalizedPayload = normalizeEmptyStrings(req.body || {});
+    const hasPhotoPayload = Object.prototype.hasOwnProperty.call(req.body || {}, 'photoDataUrl');
+    if (hasPhotoPayload && !isValidPdsPhotoDataUrl(normalizedPayload.photoDataUrl)) {
+      return res.status(400).json({ message: 'A JPG, PNG, or WebP PDS photo up to 5 MB is required.' });
+    }
+
+    const coerceArrayEntries = (fieldName) => {
+      const fieldValue = normalizedPayload[fieldName];
+      if (!Array.isArray(fieldValue)) return;
+
+      let changed = false;
+      const expanded = [];
+
+      fieldValue.forEach((item) => {
+        if (typeof item !== 'string') {
+          expanded.push(item);
+          return;
+        }
+
+        const parsed = parsePossiblyStringified(item);
+
+        if (Array.isArray(parsed)) {
+          expanded.push(...parsed);
+          changed = true;
+          return;
+        }
+
+        if (parsed && typeof parsed === 'object') {
+          expanded.push(parsed);
+          changed = true;
+          return;
+        }
+
+        expanded.push(item);
+      });
+
+      if (changed) {
+        normalizedPayload[fieldName] = expanded;
+      }
+    };
 
     ['workExperience', 'voluntaryWork', 'learningDevelopment', 'specialSkills', 'distinctions', 'memberships', 'references', 'civilServiceEligibilities', 'educationalBackground'].forEach((fieldName) => {
       if (normalizedPayload[fieldName] && typeof normalizedPayload[fieldName] === 'string') {
         normalizedPayload[fieldName] = parsePossiblyStringified(normalizedPayload[fieldName]);
       }
     });
+
+    ['workExperience', 'voluntaryWork', 'learningDevelopment', 'specialSkills', 'distinctions', 'memberships', 'references', 'civilServiceEligibilities', 'educationalBackground'].forEach(coerceArrayEntries);
 
     const {
       surname,
@@ -1832,12 +3873,22 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
       placeOfBirth,
       sexAtBirth,
       civilStatus,
+      height,
+      weight,
+      bloodType,
+      gsisNo,
+      pagibigNo,
+      philhealthNo,
+      sssNo,
+      tinNo,
+      agencyEmployeeNo,
       citizenship,
       residentialAddress,
       permanentAddress,
       telephone,
       mobile,
       email,
+      photoDataUrl,
       familyBackground,
       educationalBackground,
     } = normalizedPayload;
@@ -1866,18 +3917,28 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
       placeOfBirth,
       sexAtBirth,
       civilStatus,
+      height,
+      weight,
+      bloodType,
+      gsisNo,
+      pagibigNo,
+      philhealthNo,
+      sssNo,
+      tinNo,
+      agencyEmployeeNo,
       citizenship: normalizedCitizenship,
       residentialAddress: normalizeAddress(residentialAddress),
       permanentAddress: normalizeAddress(permanentAddress),
       telephone,
       mobile,
       email,
+      photoDataUrl,
       familyBackground,
       educationalBackground: educationalBackground || [],
       civilServiceEligibilities: normalizedPayload.civilServiceEligibilities || [],
       workExperience: normalizedPayload.workExperience || [],
       voluntaryWork: normalizedPayload.voluntaryWork || [],
-      learningDevelopment: normalizedPayload.learningDevelopment || [],
+      learningDevelopment: sanitizeLearningDevelopment(normalizedPayload.learningDevelopment),
       specialSkills: normalizedPayload.specialSkills || [],
       distinctions: normalizedPayload.distinctions || [],
       memberships: normalizedPayload.memberships || [],
@@ -1914,16 +3975,102 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
       },
       updatedAt: Date.now(),
     };
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'jobApplication')) {
+      const selectedPostingId = normalizedPayload.jobApplication?.postingId;
+      if (!selectedPostingId) {
+        updateDoc.jobApplication = null;
+      } else {
+        const posting = await JobPosting.findOne({
+          postingId: String(selectedPostingId),
+          status: 'Published',
+        }).lean();
+        if (!posting) {
+          return res.status(400).json({ message: 'The selected position is no longer available.' });
+        }
+        const applicantQualifications = normalizedPayload.jobApplication.applicantQualifications || {};
+        const qualificationFailures = validateJobApplicationQualifications(posting, applicantQualifications);
+        if (qualificationFailures.length > 0) {
+          return res.status(400).json({
+            message: 'The applicant does not meet all qualifications for this position.',
+            qualificationFailures,
+          });
+        }
+        updateDoc.jobApplication = {
+          postingId: posting.postingId,
+          placeOfAssignment: posting.placeOfAssignment,
+          positionTitle: posting.positionTitle,
+          plantillaItemNumber: posting.plantillaItemNumber,
+          salaryJobPayGrade: posting.salaryJobPayGrade,
+          monthlySalary: posting.monthlySalary,
+          eligibility: normalizeJobEligibility(posting.eligibility),
+          education: posting.education,
+          training: posting.training,
+          workExperience: posting.workExperience,
+          competency: posting.competency,
+          applicantQualifications,
+          status: 'Pending',
+          submittedAt: new Date(),
+        };
+      }
+    }
+    if (!hasPhotoPayload) {
+      delete updateDoc.photoDataUrl;
+    }
+
+    const existingPds = await PersonalDataSheet.findOne({ pdsId })
+      .select('ownerStaffId submittedByStaffId ownerEmail submittedOnBehalf submittedByEmail email status updatePermissionGranted updatePermissionExpiresAt')
+      .lean();
+    if (!existingPds) {
+      return res.status(404).json({ message: 'PDS submission not found' });
+    }
+
+    const requesterRole = normalizeRole(req.user?.role);
+    const isAdminRequester = isDepartmentStaffManager(req.user);
+    const requesterEmail = String(req.user?.email || '').trim().toLowerCase();
+    const ownerEmail = String(existingPds.ownerEmail || existingPds.email || '').trim().toLowerCase();
+    const isOwner = Boolean(requesterEmail) && Boolean(ownerEmail) && requesterEmail === ownerEmail;
+
+    if (requesterRole === ROLES.HEAD_OFFICER && !(await canManagePdsRecord(req.user, existingPds))) {
+      return res.status(403).json({ message: 'You can only manage PDS records for staff in your department.' });
+    }
+
+    if (!isAdminRequester) {
+      if (!isOwner) {
+        return res.status(403).json({ message: 'You can only update your own PDS record.' });
+      }
+
+      const isApprovedRecord = /^\s*approved\s*$/i.test(String(existingPds.status || ''));
+      if (!isApprovedRecord || !hasActivePdsUpdatePermission(existingPds)) {
+        return res.status(403).json({
+          message: 'Your approved PDS is locked. Please ask Admin/HR to grant update permission from the PDS record view.',
+        });
+      }
+
+      // User edits of approved records are resubmitted for admin review.
+      updateDoc.status = 'Pending';
+      updateDoc.remarks = '';
+      updateDoc.reviewedBy = undefined;
+      updateDoc.reviewedAt = undefined;
+      updateDoc.updatePermissionGranted = false;
+      updateDoc.updatePermissionGrantedAt = undefined;
+      updateDoc.updatePermissionGrantedBy = undefined;
+      updateDoc.updatePermissionExpiresAt = undefined;
+    }
+
+    if (!existingPds.ownerEmail) {
+      const fallbackOwnerEmail = email
+        ? String(email).trim().toLowerCase()
+        : (existingPds.email ? String(existingPds.email).trim().toLowerCase() : undefined);
+
+      updateDoc.ownerEmail = fallbackOwnerEmail;
+      updateDoc.submittedOnBehalf = Boolean(existingPds.submittedOnBehalf);
+    }
 
     const updated = await PersonalDataSheet.findOneAndUpdate(
       { pdsId },
       { $set: updateDoc },
       { new: true, runValidators: true }
     );
-
-    if (!updated) {
-      return res.status(404).json({ message: 'PDS submission not found' });
-    }
 
     res.json({ message: 'PDS updated successfully', pds: updated });
   } catch (error) {
@@ -1936,7 +4083,7 @@ app.put('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_AD
 });
 
 // Review PDS submission (admin)
-app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   const { pdsId } = req.params;
   const { status, remarks } = req.body;
 
@@ -1945,6 +4092,11 @@ app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES
   }
 
   try {
+    const target = await PersonalDataSheet.findOne({ pdsId }).select('ownerStaffId submittedByStaffId ownerEmail submittedByEmail email').lean();
+    if (!target) return res.status(404).json({ message: 'PDS submission not found' });
+    if (!(await canManagePdsRecord(req.user, target))) {
+      return res.status(403).json({ message: 'You can only review PDS records for staff in your department.' });
+    }
     const updated = await PersonalDataSheet.findOneAndUpdate(
       { pdsId },
       {
@@ -1953,6 +4105,14 @@ app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES
           remarks: remarks || '',
           reviewedBy: req.user.name,
           reviewedAt: Date.now(),
+          ...(status === 'Approved'
+            ? {
+                updatePermissionGranted: false,
+                updatePermissionGrantedAt: undefined,
+                updatePermissionGrantedBy: undefined,
+                updatePermissionExpiresAt: undefined,
+              }
+            : {}),
           updatedAt: Date.now(),
         },
       },
@@ -1970,11 +4130,147 @@ app.patch('/personal-data-sheets/:pdsId/review', verifyToken, requireRole([ROLES
   }
 });
 
+// Grant/revoke PDS update permission after approval (admin)
+app.patch('/personal-data-sheets/:pdsId/update-permission', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { pdsId } = req.params;
+  const { allowUpdate, durationDays } = req.body || {};
+
+  if (typeof allowUpdate !== 'boolean') {
+    return res.status(400).json({ message: 'allowUpdate must be a boolean value' });
+  }
+
+  const permissionExpiryDate = allowUpdate ? resolvePermissionExpiryDate(durationDays) : undefined;
+  if (allowUpdate && durationDays != null && permissionExpiryDate === null) {
+    return res.status(400).json({ message: 'durationDays must be a positive number when provided' });
+  }
+
+  try {
+    const target = await PersonalDataSheet.findOne({ pdsId }).select('status ownerStaffId submittedByStaffId ownerEmail submittedByEmail email');
+    if (!target) {
+      return res.status(404).json({ message: 'PDS submission not found' });
+    }
+    if (!(await canManagePdsRecord(req.user, target))) {
+      return res.status(403).json({ message: 'You can only change update permissions for staff in your department.' });
+    }
+
+    if (!/^\s*approved\s*$/i.test(String(target.status || ''))) {
+      return res.status(400).json({ message: 'Update permission can only be changed for Approved PDS records' });
+    }
+
+    const updated = await PersonalDataSheet.findOneAndUpdate(
+      { pdsId },
+      {
+        $set: {
+          updatePermissionGranted: allowUpdate,
+          updatePermissionGrantedAt: allowUpdate ? Date.now() : undefined,
+          updatePermissionGrantedBy: allowUpdate ? (req.user.name || req.user.email || 'Admin/HR') : undefined,
+          updatePermissionExpiresAt: allowUpdate ? permissionExpiryDate : undefined,
+          updatedAt: Date.now(),
+        },
+      },
+      { new: true }
+    );
+
+    res.json({
+      message: allowUpdate
+        ? 'PDS update permission granted successfully'
+        : 'PDS update permission revoked successfully',
+      pds: updated,
+    });
+  } catch (error) {
+    console.error('Error updating PDS update permission:', error);
+    res.status(500).json({ message: 'Failed to update PDS update permission' });
+  }
+});
+
+// Grant PDS update permission to all employee-linked approved records (admin)
+app.patch('/personal-data-sheets/update-permission/all-employees', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const { allowUpdate = true, durationDays } = req.body || {};
+
+  if (typeof allowUpdate !== 'boolean') {
+    return res.status(400).json({ message: 'allowUpdate must be a boolean value' });
+  }
+
+  const permissionExpiryDate = allowUpdate ? resolvePermissionExpiryDate(durationDays) : undefined;
+
+  if (allowUpdate && durationDays != null && permissionExpiryDate === null) {
+    return res.status(400).json({ message: 'durationDays must be a positive number when provided' });
+  }
+
+  try {
+    const staffAccounts = await Staff.find({
+      $or: [
+        { isActive: { $exists: false } },
+        { isActive: true },
+      ],
+    })
+      .select('id email')
+      .lean();
+
+    const staffIds = [...new Set(
+      staffAccounts
+        .map((staff) => String(staff.id || '').trim())
+        .filter(Boolean)
+    )];
+
+    const staffEmails = [...new Set(
+      staffAccounts
+        .map((staff) => String(staff.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    )];
+
+    if (staffIds.length === 0 && staffEmails.length === 0) {
+      return res.json({
+        message: 'No employee accounts were found to update',
+        matchedCount: 0,
+        modifiedCount: 0,
+      });
+    }
+
+    const updateResult = await PersonalDataSheet.updateMany(
+      {
+        status: { $regex: '^\\s*approved\\s*$', $options: 'i' },
+        $or: [
+          { ownerStaffId: { $in: staffIds } },
+          { submittedByStaffId: { $in: staffIds } },
+          { ownerEmail: { $in: staffEmails } },
+          { email: { $in: staffEmails } },
+        ],
+      },
+      {
+        $set: {
+          updatePermissionGranted: allowUpdate,
+          updatePermissionGrantedAt: allowUpdate ? Date.now() : undefined,
+          updatePermissionGrantedBy: allowUpdate ? (req.user.name || req.user.email || 'Admin/HR') : undefined,
+          updatePermissionExpiresAt: allowUpdate ? permissionExpiryDate : undefined,
+          updatedAt: Date.now(),
+        },
+      }
+    );
+
+    res.json({
+      message: allowUpdate
+        ? 'Update permission granted to all employee PDS records'
+        : 'Update permission revoked for all employee PDS records',
+      matchedCount: updateResult.matchedCount || 0,
+      modifiedCount: updateResult.modifiedCount || 0,
+    });
+  } catch (error) {
+    console.error('Error granting update permission to all employee PDS records:', error);
+    res.status(500).json({ message: 'Failed to update permissions for employee PDS records' });
+  }
+});
+
 // Delete PDS submission (admin)
-app.delete('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.delete('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   const { pdsId } = req.params;
 
   try {
+    const target = await PersonalDataSheet.findOne({ pdsId }).select('ownerStaffId submittedByStaffId ownerEmail submittedByEmail email');
+    if (!target) return res.status(404).json({ message: 'PDS submission not found' });
+    if (!(await canManagePdsRecord(req.user, target))) {
+      return res.status(403).json({ message: 'You can only delete PDS records for staff in your department.' });
+    }
     const deleted = await PersonalDataSheet.findOneAndDelete({ pdsId });
     if (!deleted) {
       return res.status(404).json({ message: 'PDS submission not found' });
@@ -1987,10 +4283,546 @@ app.delete('/personal-data-sheets/:pdsId', verifyToken, requireRole([ROLES.SUPER
   }
 });
 
+// ==================== DPCRF ROUTES ====================
+
+const DPCRF_PART_I_SECTION_TITLES = [
+  "I. CORE FUNCTIONS: Functions that are the essential duties that directly fulfill an organization's mandate or mission.",
+  "II. STRATEGIC FUNCTIONS: functions that guide an organization's direction, ensure alignment with its mission, and respond to internal and external changes.",
+  "III. SUPPORT FUNCTIONS: Functions that are internal services that enable an organization's core and strategic functions to operate effectively.",
+];
+
+const normalizeDpcrfText = (value) => {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+};
+
+const computeDpcrfAverageRating = (q, e, t) => {
+  const values = [q, e, t]
+    .map((value) => Number.parseFloat(normalizeDpcrfText(value)))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length === 0) return '';
+
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return average.toFixed(2).replace(/\.00$/, '');
+};
+
+const sanitizeDpcrfScaleRows = (rows) => {
+  const defaultScales = [5, 4, 3, 2, 1];
+  const incomingRows = Array.isArray(rows) ? rows : [];
+
+  return defaultScales.map((scale) => {
+    const match = incomingRows.find((row) => Number(row?.scale) === scale) || {};
+    return {
+      scale,
+      quality: normalizeDpcrfText(match.quality),
+      efficiency: normalizeDpcrfText(match.efficiency),
+      timeliness: normalizeDpcrfText(match.timeliness),
+    };
+  });
+};
+
+const sanitizeDpcrfBlocks = (blocks) => {
+  if (!Array.isArray(blocks)) return [];
+
+  return blocks.map((block) => {
+    const q = normalizeDpcrfText(block?.actualResults?.q);
+    const e = normalizeDpcrfText(block?.actualResults?.e);
+    const t = normalizeDpcrfText(block?.actualResults?.t);
+
+    return {
+    mfo: normalizeDpcrfText(block?.mfo),
+    kra: normalizeDpcrfText(block?.kra),
+    objective: normalizeDpcrfText(block?.objective),
+    timeLine: normalizeDpcrfText(block?.timeLine),
+    weightKra: normalizeDpcrfText(block?.weightKra),
+    rows: sanitizeDpcrfScaleRows(block?.rows),
+    actualResults: {
+      q,
+      e,
+      t,
+      average: computeDpcrfAverageRating(q, e, t),
+    },
+    meansOfVerification: {
+      imageDataUrl: typeof block?.meansOfVerification?.imageDataUrl === 'string'
+        ? block.meansOfVerification.imageDataUrl
+        : '',
+      imageName: normalizeDpcrfText(block?.meansOfVerification?.imageName),
+      mimeType: normalizeDpcrfText(block?.meansOfVerification?.mimeType),
+    },
+  };
+  });
+};
+
+const sanitizeDpcrfPartISections = (sections) => {
+  const incomingSections = Array.isArray(sections) ? sections : [];
+
+  return DPCRF_PART_I_SECTION_TITLES.map((title, index) => {
+    const inputSection = incomingSections[index] || {};
+    return {
+      title,
+      blocks: sanitizeDpcrfBlocks(inputSection.blocks),
+    };
+  });
+};
+
+const sanitizeDpcrfPartIIRatings = (ratings) => {
+  if (!ratings || typeof ratings !== 'object' || Array.isArray(ratings)) {
+    return {};
+  }
+
+  return Object.entries(ratings).reduce((acc, [key, value]) => {
+    acc[String(key)] = {
+      sr: normalizeDpcrfText(value?.sr),
+      ar: normalizeDpcrfText(value?.ar),
+    };
+    return acc;
+  }, {});
+};
+
+const sanitizeSpmsCalendarRows = (rows) => {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row, index) => ({
+    order: Number.isFinite(Number(row?.order)) ? Number(row.order) : index + 1,
+    activity: normalizeDpcrfText(row?.activity),
+    january: normalizeDpcrfText(row?.january),
+    february: normalizeDpcrfText(row?.february),
+    march: normalizeDpcrfText(row?.march),
+    april: normalizeDpcrfText(row?.april),
+    may: normalizeDpcrfText(row?.may),
+    june: normalizeDpcrfText(row?.june),
+    july: normalizeDpcrfText(row?.july),
+    august: normalizeDpcrfText(row?.august),
+    september: normalizeDpcrfText(row?.september),
+    october: normalizeDpcrfText(row?.october),
+    november: normalizeDpcrfText(row?.november),
+    december: normalizeDpcrfText(row?.december),
+    responsibleOfficeActors: normalizeDpcrfText(row?.responsibleOfficeActors),
+  }));
+};
+
+const mapDpcrfSubmissionResponse = (submission) => {
+  if (!submission) return submission;
+
+  const partISubmitted = typeof submission.partISubmitted === 'boolean'
+    ? submission.partISubmitted
+    : Boolean(submission.isSubmitted);
+
+  const partIISubmitted = typeof submission.partIISubmitted === 'boolean'
+    ? submission.partIISubmitted
+    : false;
+
+  return {
+    ...submission,
+    partISubmitted,
+    partIISubmitted,
+  };
+};
+
+app.get('/dpcrf/permission', verifyToken, async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.query?.year, 10);
+    const currentYear = new Date().getFullYear();
+
+    if (!Number.isFinite(yearValue) || yearValue < 2000 || yearValue > currentYear + 3) {
+      return res.status(400).json({ message: 'A valid year is required.' });
+    }
+
+    const permission = await DPCRFPermission.findOne({ year: yearValue }).lean();
+    const normalized = normalizeDpcrfPermissionRecord(permission, yearValue);
+
+    return res.json({
+      year: yearValue,
+      allowUpdate: normalized.allowUpdate,
+      lockMode: normalized.lockMode,
+      durationValue: normalized.durationValue,
+      expiresAt: normalized.expiresAt,
+      updatedBy: normalized.updatedBy,
+      updatedAt: normalized.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error fetching DPCRF update permission:', error);
+    return res.status(500).json({ message: 'Failed to fetch DPCRF update permission.' });
+  }
+});
+
+app.patch('/dpcrf/permission', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  const yearValue = Number.parseInt(req.body?.year, 10);
+  const currentYear = new Date().getFullYear();
+  const { allowUpdate, lockMode, durationValue } = req.body || {};
+
+  if (!Number.isFinite(yearValue) || yearValue < 2000 || yearValue > currentYear + 3) {
+    return res.status(400).json({ message: 'A valid year is required.' });
+  }
+  if (typeof allowUpdate !== 'boolean') {
+    return res.status(400).json({ message: 'allowUpdate must be a boolean value.' });
+  }
+
+  const normalizedLockMode = ['manual', 'days', 'weeks', 'months'].includes(String(lockMode || 'manual').toLowerCase())
+    ? String(lockMode).toLowerCase()
+    : 'manual';
+
+  const parsedDurationValue = Number(durationValue);
+  let expiresAt = null;
+
+  if (allowUpdate === false && normalizedLockMode !== 'manual') {
+    if (!Number.isFinite(parsedDurationValue) || parsedDurationValue <= 0) {
+      return res.status(400).json({ message: 'durationValue must be a positive number when a timed lock is selected.' });
+    }
+    const lockMs = resolveDpcrfLockWindowMs(normalizedLockMode, parsedDurationValue);
+    if (lockMs === null) {
+      return res.status(400).json({ message: 'A valid timed lock mode is required.' });
+    }
+    expiresAt = new Date(Date.now() + lockMs);
+  }
+
+  try {
+    const permission = await DPCRFPermission.findOneAndUpdate(
+      { year: yearValue },
+      {
+        $set: {
+          allowUpdate,
+          lockMode: normalizedLockMode,
+          durationValue: allowUpdate ? null : (normalizedLockMode === 'manual' ? null : parsedDurationValue),
+          expiresAt: allowUpdate ? null : expiresAt,
+          updatedBy: req.user?.name || req.user?.email || 'Admin/HR',
+          updatedAt: Date.now(),
+        },
+        $setOnInsert: { year: yearValue },
+      },
+      { new: true, upsert: true, runValidators: true }
+    ).lean();
+
+    const normalized = normalizeDpcrfPermissionRecord(permission, yearValue);
+
+    return res.json({
+      message: allowUpdate
+        ? `DPCRF updates enabled for ${yearValue}.`
+        : `DPCRF updates locked for ${yearValue}.`,
+      permission: normalized,
+    });
+  } catch (error) {
+    console.error('Error updating DPCRF update permission:', error);
+    return res.status(500).json({ message: 'Failed to update DPCRF update permission.' });
+  }
+});
+
+app.post('/dpcrf-submissions', verifyToken, async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.body?.year, 10);
+    const currentYear = new Date().getFullYear();
+
+    if (!Number.isFinite(yearValue) || yearValue < 2000 || yearValue > currentYear + 3) {
+      return res.status(400).json({ message: 'A valid year is required.' });
+    }
+
+    const ownerStaffId = String(req.user?.staffId || '').trim();
+    const ownerEmail = String(req.user?.email || '').trim().toLowerCase();
+    const ownerName = String(req.user?.name || '').trim();
+    const ownerDepartment = String(req.user?.department || '').trim();
+
+    if (!ownerStaffId || !ownerEmail || !ownerName) {
+      return res.status(400).json({ message: 'Unable to resolve account details for DPCRF submission.' });
+    }
+
+    const [existing, permission] = await Promise.all([
+      DPCRFSubmission.findOne({ ownerStaffId, year: yearValue }),
+      DPCRFPermission.findOne({ year: yearValue }).select('allowUpdate lockMode durationValue expiresAt updatedAt'),
+    ]);
+    if (existing?.partISubmitted && !canUpdateDpcrfPart(permission)) {
+      return res.status(409).json({ message: 'DPCRF updates are locked by the administrator.' });
+    }
+
+    const sanitizedSections = sanitizeDpcrfPartISections(req.body?.partI?.sections);
+    const sanitizedPartIIRatings = sanitizeDpcrfPartIIRatings(req.body?.partII?.ratings);
+
+    const hasMissingProof = sanitizedSections.some((section) =>
+      (section.blocks || []).some((block) => !normalizeDpcrfText(block?.meansOfVerification?.imageDataUrl))
+    );
+
+    if (hasMissingProof) {
+      return res.status(400).json({ message: 'Please attach Means of Verification (Proof) image for all DPCRF rows before submission.' });
+    }
+
+    const now = Date.now();
+    const submission = existing || new DPCRFSubmission({
+      submissionId: `DPCRF-${yearValue}-${ownerStaffId}`,
+      ownerStaffId,
+      ownerEmail,
+      ownerName,
+      ownerDepartment,
+      year: yearValue,
+      partII: { ratings: {} },
+      partIISubmitted: false,
+      partIISubmittedAt: null,
+      createdAt: now,
+    });
+    submission.partI = { sections: sanitizedSections };
+    submission.partII = { ratings: sanitizedPartIIRatings };
+    submission.ownerEmail = ownerEmail;
+    submission.ownerName = ownerName;
+    submission.ownerDepartment = ownerDepartment;
+    submission.status = 'Submitted';
+    submission.partISubmitted = true;
+    submission.partISubmittedAt = now;
+    submission.isSubmitted = true;
+    submission.submittedAt = now;
+    submission.updatedAt = now;
+
+    await submission.save();
+
+    res.status(existing ? 200 : 201).json({
+      message: existing ? 'DPCRF updated successfully.' : 'DPCRF submitted successfully.',
+      submission: mapDpcrfSubmissionResponse(submission.toObject()),
+    });
+  } catch (error) {
+    console.error('Error submitting DPCRF:', error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: 'DPCRF updates are locked by the administrator.' });
+    }
+    res.status(500).json({ message: 'Failed to submit DPCRF.' });
+  }
+});
+
+app.post('/dpcrf-submissions/part2', verifyToken, async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.body?.year, 10);
+    const currentYear = new Date().getFullYear();
+
+    if (!Number.isFinite(yearValue) || yearValue < 2000 || yearValue > currentYear + 3) {
+      return res.status(400).json({ message: 'A valid year is required.' });
+    }
+
+    const ownerStaffId = String(req.user?.staffId || '').trim();
+    const ownerEmail = String(req.user?.email || '').trim().toLowerCase();
+    const ownerName = String(req.user?.name || '').trim();
+    const ownerDepartment = String(req.user?.department || '').trim();
+
+    if (!ownerStaffId || !ownerEmail || !ownerName) {
+      return res.status(400).json({ message: 'Unable to resolve account details for Part II submission.' });
+    }
+
+    const incomingRatings = sanitizeDpcrfPartIIRatings(req.body?.partII?.ratings || req.body?.ratings || {});
+
+    let [submission, permission] = await Promise.all([
+      DPCRFSubmission.findOne({ ownerStaffId, year: yearValue }),
+      DPCRFPermission.findOne({ year: yearValue }).select('allowUpdate lockMode durationValue expiresAt updatedAt'),
+    ]);
+    if (submission?.partIISubmitted && !canUpdateDpcrfPart(permission)) {
+      return res.status(409).json({ message: 'DPCRF updates are locked by the administrator.' });
+    }
+
+    if (!submission) {
+      const srOnlyRatings = Object.entries(incomingRatings).reduce((acc, [key, value]) => {
+        acc[key] = {
+          sr: normalizeDpcrfText(value?.sr),
+          ar: '',
+        };
+        return acc;
+      }, {});
+
+      submission = new DPCRFSubmission({
+        submissionId: `DPCRF-${yearValue}-${ownerStaffId}`,
+        ownerStaffId,
+        ownerEmail,
+        ownerName,
+        ownerDepartment,
+        year: yearValue,
+        partI: { sections: sanitizeDpcrfPartISections([]) },
+        partII: { ratings: srOnlyRatings },
+        status: 'Submitted',
+        partISubmitted: false,
+        partIISubmitted: true,
+        partISubmittedAt: null,
+        partIISubmittedAt: Date.now(),
+        isSubmitted: false,
+        submittedAt: Date.now(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    } else {
+      const existingRatings = sanitizeDpcrfPartIIRatings(submission.partII?.ratings || {});
+      const mergedRatings = { ...existingRatings };
+
+      Object.entries(incomingRatings).forEach(([key, value]) => {
+        const existing = mergedRatings[key] || { sr: '', ar: '' };
+        mergedRatings[key] = {
+          sr: normalizeDpcrfText(value?.sr),
+          ar: normalizeDpcrfText(existing?.ar),
+        };
+      });
+
+      submission.partII = { ratings: mergedRatings };
+      submission.partIISubmitted = true;
+      submission.partIISubmittedAt = Date.now();
+      submission.updatedAt = Date.now();
+    }
+
+    await submission.save();
+
+    return res.status(201).json({
+      message: 'Part II submitted successfully.',
+      submission: mapDpcrfSubmissionResponse(submission.toObject()),
+    });
+  } catch (error) {
+    console.error('Error submitting DPCRF Part II:', error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: 'DPCRF updates are locked by the administrator.' });
+    }
+    return res.status(500).json({ message: 'Failed to submit DPCRF Part II.' });
+  }
+});
+
+app.get('/dpcrf-submissions/my', verifyToken, async (req, res) => {
+  try {
+    const ownerStaffId = String(req.user?.staffId || '').trim();
+    const yearValue = Number.parseInt(req.query?.year, 10) || new Date().getFullYear();
+
+    if (!ownerStaffId) {
+      return res.status(400).json({ message: 'Unable to resolve account details for DPCRF lookup.' });
+    }
+
+    const submission = await DPCRFSubmission.findOne({ ownerStaffId, year: yearValue }).lean();
+    res.json({ submission: submission ? mapDpcrfSubmissionResponse(submission) : null });
+  } catch (error) {
+    console.error('Error fetching own DPCRF submission:', error);
+    res.status(500).json({ message: 'Failed to fetch your DPCRF submission.' });
+  }
+});
+
+app.get('/dpcrf-submissions', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.query?.year, 10) || new Date().getFullYear();
+    const filter = Number.isFinite(yearValue) ? { year: yearValue } : {};
+    if (normalizeRole(req.user?.role) === ROLES.HEAD_OFFICER) {
+      const managedStaff = await getDepartmentStaff(req.user);
+      filter.ownerStaffId = { $in: (managedStaff || []).map((staff) => staff.id).filter(Boolean) };
+    }
+
+    const submissions = await DPCRFSubmission.find(filter)
+      .sort({ submittedAt: -1, createdAt: -1 })
+      .lean();
+
+    res.json({ submissions: submissions.map((submission) => mapDpcrfSubmissionResponse(submission)) });
+  } catch (error) {
+    console.error('Error fetching DPCRF submissions:', error);
+    res.status(500).json({ message: 'Failed to fetch DPCRF submissions.' });
+  }
+});
+
+app.patch('/dpcrf-submissions/:submissionId/part2-ar', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+
+    const submission = await DPCRFSubmission.findOne({ submissionId });
+    if (!submission) {
+      return res.status(404).json({ message: 'DPCRF submission not found.' });
+    }
+    if (!(await canManageStaffId(req.user, submission.ownerStaffId))) {
+      return res.status(403).json({ message: 'You can only manage DPCRF submissions for staff in your department.' });
+    }
+    if (!submission.partIISubmitted) {
+      return res.status(400).json({ message: 'Part II Actual Rates can only be updated after staff Part II submission.' });
+    }
+
+    const existingRatings = sanitizeDpcrfPartIIRatings(submission.partII?.ratings || {});
+    const incomingRatings = sanitizeDpcrfPartIIRatings(req.body?.ratings || {});
+
+    const mergedRatings = { ...existingRatings };
+    Object.entries(incomingRatings).forEach(([key, value]) => {
+      const existing = mergedRatings[key] || { sr: '', ar: '' };
+      mergedRatings[key] = {
+        sr: existing.sr,
+        ar: normalizeDpcrfText(value?.ar),
+      };
+    });
+
+    submission.partII = { ratings: mergedRatings };
+    submission.updatedAt = Date.now();
+    await submission.save();
+
+    return res.json({
+      message: 'Part II Actual Rates updated successfully.',
+      submission: mapDpcrfSubmissionResponse(submission.toObject()),
+    });
+  } catch (error) {
+    console.error('Error updating Part II AR ratings:', error);
+    return res.status(500).json({ message: 'Failed to update Part II Actual Rates.' });
+  }
+});
+
+app.get('/dpcrf/spms-calendar', verifyToken, async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.query?.year, 10) || new Date().getFullYear();
+    const calendar = await SpmsCalendar.findOne({ year: yearValue }).lean();
+    return res.json({ calendar: calendar || null });
+  } catch (error) {
+    console.error('Error fetching SPMS calendar:', error);
+    return res.status(500).json({ message: 'Failed to fetch SPMS calendar.' });
+  }
+});
+
+app.put('/dpcrf/spms-calendar', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const yearValue = Number.parseInt(req.body?.year, 10);
+    const currentYear = new Date().getFullYear();
+
+    if (!Number.isFinite(yearValue) || yearValue < 2000 || yearValue > currentYear + 3) {
+      return res.status(400).json({ message: 'A valid year is required.' });
+    }
+
+    const sanitizedRows = sanitizeSpmsCalendarRows(req.body?.rows || []);
+
+    const update = {
+      rows: sanitizedRows,
+      preparedByName: normalizeDpcrfText(req.body?.preparedByName),
+      preparedByTitle: normalizeDpcrfText(req.body?.preparedByTitle),
+      approvedByName: normalizeDpcrfText(req.body?.approvedByName),
+      approvedByTitle: normalizeDpcrfText(req.body?.approvedByTitle),
+      updatedBy: normalizeDpcrfText(req.user?.name || req.user?.email),
+      updatedAt: Date.now(),
+    };
+
+    const calendar = await SpmsCalendar.findOneAndUpdate(
+      { year: yearValue },
+      { $set: update, $setOnInsert: { createdAt: Date.now() } },
+      { new: true, upsert: true }
+    );
+
+    return res.json({ message: 'SPMS calendar saved successfully.', calendar });
+  } catch (error) {
+    console.error('Error saving SPMS calendar:', error);
+    return res.status(500).json({ message: 'Failed to save SPMS calendar.' });
+  }
+});
+
 // Create Staff (Super Admin/Admin-HR, and Head Officers for own department staff)
 app.post('/staffs', verifyToken, async (req, res) => {
   const { id, name, email, password, role, position, department, phone, dateOfBirth, placeOfBirth, tinNumber, dateHired } = req.body;
   const userRole = req.user.role;
+  const profileFields = normalizeStaffProfileFields(req.body);
+  if (profileFields.error) {
+    return res.status(400).json({ message: profileFields.error });
+  }
+
+  let normalizedDateOfBirth;
+  if (dateOfBirth !== undefined && dateOfBirth !== null && String(dateOfBirth).trim() !== '') {
+    const parsedDateOfBirth = new Date(dateOfBirth);
+    if (Number.isNaN(parsedDateOfBirth.getTime())) {
+      return res.status(400).json({ message: 'Invalid Date of Birth value' });
+    }
+    normalizedDateOfBirth = parsedDateOfBirth;
+  }
+
+  let normalizedDateHired;
+  if (dateHired !== undefined && dateHired !== null && String(dateHired).trim() !== '') {
+    const parsedDateHired = new Date(dateHired);
+    if (Number.isNaN(parsedDateHired.getTime())) {
+      return res.status(400).json({ message: 'Invalid Date of Employment value' });
+    }
+    normalizedDateHired = parsedDateHired;
+  }
 
   if (!id || !name || !email || !password) {
     return res.status(400).json({ message: 'ID, name, email, and password are required' });
@@ -2030,7 +4862,7 @@ app.post('/staffs', verifyToken, async (req, res) => {
   try {
     const existing = await Staff.findOne({ $or: [{ id }, { email }] });
     if (existing) {
-      return res.status(409).json({ message: 'Staff ID or email already exists' });
+      return res.status(409).json({ message: 'Item Number or email already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -2045,10 +4877,12 @@ app.post('/staffs', verifyToken, async (req, res) => {
         ? (userRole === ROLES.HEAD_OFFICER ? req.user.department : department)
         : null,
       phone,
-      dateOfBirth,
+      dateOfBirth: normalizedDateOfBirth,
       placeOfBirth,
       tinNumber,
-      dateHired,
+      dateHired: normalizedDateHired,
+      ...profileFields.fields,
+      lengthOfService: calculateStaffLengthOfService(normalizedDateHired),
       isApproved: true,
       approvedAt: Date.now(),
       approvedBy: req.user.name
@@ -2081,15 +4915,16 @@ app.post('/staffs', verifyToken, async (req, res) => {
 // Get all staffs (Super Admin, Admin/HR, and Head Officers for their department)
 app.get('/staffs', verifyToken, async (req, res) => {
   try {
+    const userRole = normalizeRole(req.user.role);
     // Check if user has permission to view staffs
-    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(req.user.role)) {
+    if (![ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER].includes(userRole)) {
       return res.status(403).json({ message: 'Access denied. Only admins and head officers can view staff lists.' });
     }
 
     let filter = {};
     
     // Head Officers can only see staff in their department
-    if (req.user.role === ROLES.HEAD_OFFICER) {
+    if (userRole === ROLES.HEAD_OFFICER) {
       filter = { 
         $or: [
           { department: req.user.department },
@@ -2099,7 +4934,58 @@ app.get('/staffs', verifyToken, async (req, res) => {
     }
 
     const staffs = await Staff.find(filter).select('-password');
-    res.json(staffs);
+    const staffIds = staffs.map((staff) => staff.id).filter(Boolean);
+    const staffEmails = staffs.map((staff) => String(staff.email || '').trim().toLowerCase()).filter(Boolean);
+    const pdsOwnerFilters = [];
+    if (staffIds.length) pdsOwnerFilters.push({ ownerStaffId: { $in: staffIds } });
+    if (staffEmails.length) {
+      const emailExpressions = staffEmails.map((email) => {
+        const escapedEmail = email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^${escapedEmail}$`, 'i');
+      });
+      pdsOwnerFilters.push({ ownerEmail: { $in: emailExpressions } });
+      pdsOwnerFilters.push({
+        $and: [
+          { ownerEmail: { $in: [null, ''] } },
+          { email: { $in: emailExpressions } },
+        ],
+      });
+    }
+
+    const pdsByStaffId = new Map();
+    const pdsByEmail = new Map();
+    if (pdsOwnerFilters.length) {
+      const pdsRecords = await PersonalDataSheet.find({
+        $and: [
+          { $or: pdsOwnerFilters },
+          { submittedOnBehalf: { $ne: true } },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .select('ownerStaffId ownerEmail email dateOfBirth')
+        .lean();
+
+      const addPdsDateToIdentityMap = (map, identity, pds) => {
+        const key = String(identity || '').trim().toLowerCase();
+        if (!key) return;
+        if (!map.has(key)) map.set(key, pds.dateOfBirth || null);
+      };
+
+      for (const pds of pdsRecords) {
+        addPdsDateToIdentityMap(pdsByStaffId, pds.ownerStaffId, pds);
+        addPdsDateToIdentityMap(pdsByEmail, pds.ownerEmail || pds.email, pds);
+      }
+    }
+
+    res.json(staffs.map((staff) => {
+      const pdsDateOfBirth = pdsByStaffId.get(String(staff.id || '').trim().toLowerCase())
+        || pdsByEmail.get(String(staff.email || '').trim().toLowerCase());
+      return {
+        ...staff.toObject(),
+        sexAtBirth: staff.sexAtBirth || '',
+        dateOfBirth: staff.dateOfBirth || pdsDateOfBirth || null,
+      };
+    }));
   } catch (error) {
     console.error('Error fetching staffs:', error);
     res.status(500).json({ message: 'Failed to retrieve staffs' });
@@ -2118,7 +5004,7 @@ app.get('/staffs/:id', verifyToken, async (req, res) => {
     }
 
     // Check if user can view this staff
-    const userRole = req.user.role;
+    const userRole = normalizeRole(req.user.role);
     const userDepartment = req.user.department;
     const staffDepartment = staff.department;
 
@@ -2151,7 +5037,64 @@ app.get('/staffs/:id', verifyToken, async (req, res) => {
 
 // Update staff (Admin can update any staff, Staff can update themselves, Head Officers can update their dept staff)
 app.put('/staffs/:id', verifyToken, async (req, res) => {
-  const { name, position, department, email, phone, dateOfBirth, placeOfBirth, tinNumber, role, password, currentPassword } = req.body;
+  const {
+    name,
+    position,
+    department,
+    email,
+    phone,
+    dateOfBirth,
+    dateHired,
+    placeOfBirth,
+    tinNumber,
+    businessPartnerNumber,
+    philhealthNo,
+    pagibigNo,
+    maritalStatus,
+    address,
+    employmentStatus,
+    lengthOfService,
+    monthlyBasicSalary,
+    peraRata,
+    grossSalary,
+    pendingAdministrativeCase,
+    pendingCriminalCase,
+    salaryGrade,
+    role,
+    profilePhotoDataUrl,
+    sexAtBirth,
+    password,
+    currentPassword,
+  } = req.body;
+  const hasProfilePhotoPayload = Object.prototype.hasOwnProperty.call(req.body, 'profilePhotoDataUrl');
+  const hasSexAtBirthPayload = Object.prototype.hasOwnProperty.call(req.body, 'sexAtBirth');
+  const hasDateOfBirthPayload = Object.prototype.hasOwnProperty.call(req.body, 'dateOfBirth');
+  const hasDateHiredPayload = Object.prototype.hasOwnProperty.call(req.body, 'dateHired');
+  const profileFieldNames = [
+    'address',
+    'employmentStatus',
+    'lengthOfService',
+    'monthlyBasicSalary',
+    'peraRata',
+    'grossSalary',
+    'pendingAdministrativeCase',
+    'pendingCriminalCase',
+    'salaryGrade',
+    'sexAtBirth',
+    'businessPartnerNumber',
+    'philhealthNo',
+    'pagibigNo',
+    'maritalStatus',
+  ];
+  const hasProfileFieldsPayload = profileFieldNames.some((field) => Object.prototype.hasOwnProperty.call(req.body, field));
+
+  console.log('[PUT /staffs/:id] Incoming date payload:', {
+    requestedId: req.params.id,
+    hasDateOfBirthPayload,
+    dateOfBirth,
+    hasDateHiredPayload,
+    dateHired,
+  });
 
   try {
     // Find the staff member
@@ -2195,6 +5138,17 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to update this staff account' });
     }
 
+    const isAdminUser = isSystemAdminRole(userRole);
+    const protectedProfileFields = [...STAFF_PROFILE_REQUEST_FIELDS, 'role'];
+    const hasProtectedProfilePayload = protectedProfileFields.some((field) => (
+      Object.prototype.hasOwnProperty.call(req.body, field)
+    ));
+    if (!isAdminUser && hasProtectedProfilePayload) {
+      return res.status(403).json({
+        message: 'Profile changes require admin approval. Submit an Update Account Information Request instead.',
+      });
+    }
+
     if (userRole === ROLES.HEAD_OFFICER) {
       if (role) {
         return res.status(403).json({ message: 'Head Officers cannot change account roles' });
@@ -2205,11 +5159,93 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
       }
     }
 
-    if (!name && !position && !department && !email && !phone && !dateOfBirth && !placeOfBirth && !tinNumber && !role && !password) {
+    if (!name && !position && !department && !email && !phone && !placeOfBirth && !tinNumber && !role && !password && !hasDateOfBirthPayload && !hasDateHiredPayload && !hasProfileFieldsPayload && !hasProfilePhotoPayload && !hasSexAtBirthPayload) {
       return res.status(400).json({ message: 'At least one field is required to update' });
     }
 
-    const updateData = { name, position, department, email, phone, dateOfBirth, placeOfBirth, tinNumber, role };
+    if (hasSexAtBirthPayload && !['', 'Male', 'Female'].includes(sexAtBirth)) {
+      return res.status(400).json({ message: 'Sex must be Male or Female, or left blank.' });
+    }
+
+    const updateData = {
+      name,
+      position,
+      department,
+      email,
+      phone,
+      placeOfBirth,
+      tinNumber,
+      businessPartnerNumber,
+      philhealthNo,
+      pagibigNo,
+      maritalStatus,
+      address,
+      employmentStatus,
+      lengthOfService,
+      monthlyBasicSalary,
+      peraRata,
+      grossSalary,
+      pendingAdministrativeCase,
+      pendingCriminalCase,
+      salaryGrade,
+      role,
+    };
+    if (hasProfilePhotoPayload) {
+      if (profilePhotoDataUrl && !isValidProfilePhotoDataUrl(profilePhotoDataUrl)) {
+        return res.status(400).json({ message: 'Profile photo must be a JPG, PNG, or WebP image up to 5 MB.' });
+      }
+      updateData.profilePhotoDataUrl = profilePhotoDataUrl || '';
+    }
+    if (hasSexAtBirthPayload) updateData.sexAtBirth = sexAtBirth;
+
+    for (const [field, value] of Object.entries({ monthlyBasicSalary, grossSalary })) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) continue;
+      if (value === '' || value === null) {
+        updateData[field] = null;
+        continue;
+      }
+
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount < 0) {
+        return res.status(400).json({ message: `${field} must be a non-negative number` });
+      }
+      updateData[field] = amount;
+    }
+
+    for (const [field, value] of Object.entries({ pendingAdministrativeCase, pendingCriminalCase })) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) continue;
+      if (value === '' || value === null) {
+        updateData[field] = null;
+      } else if (value === true || value === 'true') {
+        updateData[field] = true;
+      } else if (value === false || value === 'false') {
+        updateData[field] = false;
+      } else {
+        return res.status(400).json({ message: `${field} must be true or false` });
+      }
+    }
+
+    if (hasDateOfBirthPayload && String(dateOfBirth || '').trim() !== '') {
+      const parsedDateOfBirth = new Date(dateOfBirth);
+      if (Number.isNaN(parsedDateOfBirth.getTime())) {
+        return res.status(400).json({ message: 'Invalid Date of Birth value' });
+      }
+      updateData.dateOfBirth = parsedDateOfBirth;
+    }
+
+    if (hasDateHiredPayload) {
+      if (String(dateHired || '').trim() === '') {
+        updateData.dateHired = null;
+        updateData.lengthOfService = '';
+      } else {
+        const parsedDateHired = new Date(dateHired);
+        if (Number.isNaN(parsedDateHired.getTime())) {
+          return res.status(400).json({ message: 'Invalid Date of Employment value' });
+        }
+        updateData.dateHired = parsedDateHired;
+        updateData.lengthOfService = calculateStaffLengthOfService(parsedDateHired);
+      }
+    }
     
     // If password is provided, verify current password first (unless admins are updating someone else)
     if (password) {
@@ -2238,11 +5274,34 @@ app.put('/staffs/:id', verifyToken, async (req, res) => {
       console.log('  Password hashed and updated');
     }
 
+    if (hasSexAtBirthPayload) {
+      staff.sexAtBirth = sexAtBirth;
+      await staff.save({ validateModifiedOnly: true });
+    }
+
     const updatedStaff = await Staff.findOneAndUpdate(
       { id: req.params.id },
       { $set: updateData },
       { new: true, omitUndefined: true }
     ).select('-password');
+
+    if (!updatedStaff) {
+      return res.status(500).json({ message: 'Staff profile update could not be confirmed.' });
+    }
+    if (hasSexAtBirthPayload && updatedStaff.sexAtBirth !== sexAtBirth) {
+      console.error('[PUT /staffs/:id] Sex value did not persist:', {
+        staffId: updatedStaff.id,
+        requestedSex: sexAtBirth,
+        savedSex: updatedStaff.sexAtBirth,
+      });
+      return res.status(500).json({ message: 'Sex update could not be confirmed. Please try again.' });
+    }
+
+    console.log('[PUT /staffs/:id] Saved date fields:', {
+      id: updatedStaff?.id,
+      dateOfBirth: updatedStaff?.dateOfBirth,
+      dateHired: updatedStaff?.dateHired,
+    });
 
     await createSystemLogEntry({
       module: 'User Management',
@@ -2313,6 +5372,159 @@ app.delete('/staffs/:id', verifyToken, async (req, res) => {
 });
 
 // Get pending staff registrations (Super Admin, Admin/HR, and Head Officers for their department)
+app.post('/staff-update-requests', verifyToken, async (req, res) => {
+  if (isSystemAdminRole(req.user?.role)) {
+    return res.status(403).json({ message: 'Administrators can update profile information directly.' });
+  }
+
+  const staffId = String(req.user?.staffId || req.user?.id || '').trim();
+  if (!staffId) {
+    return res.status(400).json({ message: 'Your staff account could not be identified.' });
+  }
+
+  const normalizedRequest = normalizeStaffProfileRequestFields(req.body);
+  if (normalizedRequest.error) {
+    return res.status(400).json({ message: normalizedRequest.error });
+  }
+
+  try {
+    const staff = await Staff.findOne({ id: staffId }).select(
+      [...STAFF_PROFILE_REQUEST_FIELDS, 'id'].join(' ')
+    );
+    if (!staff) {
+      return res.status(404).json({ message: 'Staff account not found.' });
+    }
+
+    const existingPendingRequest = await StaffUpdateRequest.findOne({ staffId, status: 'Pending' }).select('requestId');
+    if (existingPendingRequest) {
+      return res.status(409).json({
+        message: 'You already have a pending account information update request. Please wait for Admin/HR to review it.',
+      });
+    }
+
+    const requestedFields = normalizedRequest.fields;
+    const currentFields = Object.fromEntries(
+      Object.keys(requestedFields).map((field) => [
+        field,
+        field === 'profilePhotoDataUrl'
+          ? (staff.profilePhotoDataUrl ? '[Profile photo on file]' : '')
+          : (staff.get(field) ?? null),
+      ])
+    );
+    const request = await StaffUpdateRequest.create({
+      requestId: randomUUID(),
+      staffId,
+      staffName: staff.name || req.user.name || '',
+      staffEmail: staff.email || req.user.email || '',
+      currentFields,
+      requestedFields,
+    });
+
+    res.status(201).json({ message: 'Profile update request submitted for admin review.', request });
+  } catch (error) {
+    console.error('Error creating staff profile update request:', error);
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: 'You already have a pending account information update request. Please wait for Admin/HR to review it.',
+      });
+    }
+    res.status(500).json({ message: 'Failed to submit profile update request.' });
+  }
+});
+
+app.get('/staff-update-requests', verifyToken, async (req, res) => {
+  if (!isSystemAdminRole(req.user?.role)) {
+    return res.status(403).json({ message: 'Only Admin/HR can review profile update requests.' });
+  }
+
+  try {
+    const requests = await StaffUpdateRequest.find({ status: 'Pending' }).sort({ createdAt: -1 }).lean();
+    res.json(requests);
+  } catch (error) {
+    console.error('Error fetching staff profile update requests:', error);
+    res.status(500).json({ message: 'Failed to retrieve profile update requests.' });
+  }
+});
+
+app.patch('/staff-update-requests/:requestId/review', verifyToken, async (req, res) => {
+  if (!isSystemAdminRole(req.user?.role)) {
+    return res.status(403).json({ message: 'Only Admin/HR can review profile update requests.' });
+  }
+
+  const { status } = req.body || {};
+  if (!['Approved', 'Rejected'].includes(status)) {
+    return res.status(400).json({ message: 'Review status must be Approved or Rejected.' });
+  }
+
+  try {
+    const request = await StaffUpdateRequest.findOne({
+      requestId: req.params.requestId,
+      status: 'Pending',
+    });
+    if (!request) {
+      return res.status(404).json({ message: 'Pending profile update request not found.' });
+    }
+
+    if (status === 'Approved') {
+      const staff = await Staff.findOne({ id: request.staffId });
+      if (!staff) {
+        return res.status(404).json({ message: 'Staff account for this request no longer exists.' });
+      }
+
+      const normalizedRequest = normalizeStaffProfileRequestFields(request.requestedFields);
+      if (normalizedRequest.error) {
+        return res.status(400).json({ message: normalizedRequest.error });
+      }
+      const updates = normalizedRequest.fields;
+
+      if (Object.prototype.hasOwnProperty.call(updates, 'email')) {
+        const escapedEmail = updates.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const emailInUse = await Staff.findOne({
+          email: { $regex: `^${escapedEmail}$`, $options: 'i' },
+          id: { $ne: request.staffId },
+        }).select('id');
+        if (emailInUse) {
+          return res.status(409).json({ message: 'That email address is already in use by another staff account.' });
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(updates, 'dateHired')) {
+        updates.lengthOfService = updates.dateHired
+          ? calculateStaffLengthOfService(updates.dateHired)
+          : '';
+      }
+      staff.set(updates);
+      staff.updatedAt = new Date();
+      await staff.save();
+    }
+
+    request.status = status;
+    request.reviewedBy = req.user.name || req.user.email || 'Admin/HR';
+    request.reviewedAt = new Date();
+    request.updatedAt = new Date();
+    await request.save();
+
+    await createSystemLogEntry({
+      module: 'User Management',
+      action: status === 'Approved' ? 'Approve Profile Update Request' : 'Reject Profile Update Request',
+      user: req.user.name || req.user.email || 'Admin/HR',
+      userId: req.user.staffId,
+      description: `${status} profile update request for ${request.staffId} - ${request.staffName}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: { requestId: request.requestId, targetStaffId: request.staffId },
+    });
+
+    res.json({ message: `Profile update request ${status.toLowerCase()}.`, request });
+  } catch (error) {
+    console.error('Error reviewing staff profile update request:', error);
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Failed to review profile update request.' });
+  }
+});
+
 app.get('/staffs-pending', verifyToken, async (req, res) => {
   try {
     const userRole = req.user.role;
@@ -2449,7 +5661,7 @@ app.patch('/staffs/:id/esign-permission', verifyToken, async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Only admins and head officers can update e-signature permissions.' });
     }
 
-    console.log('E-signature permission update - Staff ID:', req.params.id);
+    console.log('E-signature permission update - Item Number:', req.params.id);
     console.log('E-signature permission update - Request body:', req.body);
     const { eSignPermission } = req.body;
     const staff = await Staff.findOne({ id: req.params.id });
@@ -2583,7 +5795,7 @@ app.post('/leaves', verifyToken, async (req, res) => {
   }
 
   if (!leaveId || !staffId || !normalizedStaffName || !normalizedLeaveType) {
-    return res.status(400).json({ message: 'Staff ID, Name, and Leave Type are required' });
+    return res.status(400).json({ message: 'Item Number, Name, and Leave Type are required' });
   }
 
   if (normalizedSalary !== null && Number.isNaN(normalizedSalary)) {
@@ -2637,23 +5849,53 @@ app.post('/leaves', verifyToken, async (req, res) => {
         }
       }
 
+      if (
+        normalizedLeaveType === 'Mandatory/Force Leave'
+        && numberOfDays > FORCE_LEAVE_MAX_DAYS_PER_APPLICATION
+      ) {
+        return res.status(400).json({
+          message: `You cannot file more than ${FORCE_LEAVE_MAX_DAYS_PER_APPLICATION} days of Force Leave in one application.`,
+        });
+      }
 
-      // Enforce 5-day annual limit for Mandatory/Force Leave
+      // Enforce the approved 5-day annual limit for Mandatory/Force Leave.
       if (normalizedLeaveType === 'Mandatory/Force Leave') {
-        const now = new Date();
-        const yearStart = new Date(now.getFullYear(), 0, 1);
-        const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-        // Sum approved force leave days for this staff in the current year
+        const requestedYear = resolveLeaveCalendarYear({
+          startDate: computedStartDate,
+          dateRanges: normalizedDateRanges,
+          filingDate: normalizedFilingDate,
+        });
         const approvedForceLeaves = await Leave.find({
           staffId,
           leaveType: 'Mandatory/Force Leave',
           status: 'Approved',
-          approvalDate: { $gte: yearStart, $lte: yearEnd },
-        }).select('numberOfDays');
-        const usedForceLeaveDays = approvedForceLeaves.reduce((sum, l) => sum + (l.numberOfDays || 0), 0);
+        }).select('startDate dateRanges filingDate createdAt numberOfDays');
+        const usedForceLeaveDays = approvedForceLeaves.reduce((sum, approvedLeave) => (
+          resolveLeaveCalendarYear(approvedLeave) === requestedYear
+            ? sum + (Number(approvedLeave.numberOfDays) || 0)
+            : sum
+        ), 0);
         const requestedDays = numberOfDays || 0;
         if (usedForceLeaveDays + requestedDays > 5) {
-          return res.status(400).json({ message: `You have already used ${usedForceLeaveDays} day(s) of Force Leave this year. Maximum allowed is 5 days per year.` });
+          return res.status(400).json({ message: `You have already used ${usedForceLeaveDays} approved Force Leave day(s) in ${requestedYear}. Maximum allowed is 5 days per year.` });
+        }
+      }
+
+      if (normalizeLeaveTypeKey(normalizedLeaveType) === 'wellness') {
+        const requestedYear = resolveLeaveCalendarYear({
+          startDate: computedStartDate,
+          dateRanges: normalizedDateRanges,
+          filingDate: normalizedFilingDate,
+        });
+        const usedWellnessDays = await getApprovedLeaveDaysForYear({
+          staffId,
+          leaveTypes: ['Wellness', 'wellness', 'Wellness Leave'],
+          year: requestedYear,
+        });
+        if (usedWellnessDays + (numberOfDays || 0) > WELLNESS_ANNUAL_LIMIT) {
+          return res.status(400).json({
+            message: `You have already used ${usedWellnessDays} approved Wellness Leave day(s) in ${requestedYear}. Maximum allowed is ${WELLNESS_ANNUAL_LIMIT} days per year.`,
+          });
         }
       }
 
@@ -2679,6 +5921,50 @@ app.post('/leaves', verifyToken, async (req, res) => {
         }
         if (usedSPLDays + requestedSPLDays > 3) {
           return res.status(400).json({ message: `You have already used ${usedSPLDays} day(s) of Special Privilege Leave (SPL) this year. Maximum allowed is 3 days per year.` });
+        }
+      }
+
+      // Enforce 7-day annual limit for Paternity Leave
+      if (normalizedLeaveType === 'Paternity Leave' || normalizedLeaveType === 'Peternity Leave') {
+        const requestedPaternityDays = numberOfDays || 0;
+        const requestedYear = computedStartDate ? computedStartDate.getFullYear() : new Date().getFullYear();
+        const yearStart = new Date(requestedYear, 0, 1);
+        const yearEnd = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+        const existingPaternityLeaves = await Leave.find({
+          staffId,
+          leaveType: { $in: ['Paternity Leave', 'Peternity Leave'] },
+          status: { $in: ['Pending', 'Approved', 'For Revision'] },
+          startDate: { $gte: yearStart, $lte: yearEnd },
+        }).select('numberOfDays');
+
+        const usedPaternityDays = existingPaternityLeaves.reduce((sum, l) => sum + (l.numberOfDays || 0), 0);
+        if (usedPaternityDays + requestedPaternityDays > 7) {
+          return res.status(400).json({
+            message: `You have already filed ${usedPaternityDays} day(s) of Paternity Leave for ${requestedYear}. Maximum allowed is 7 days per year.`,
+          });
+        }
+      }
+
+      // Enforce 105-day annual limit for Maternity Leave
+      if (normalizedLeaveType === 'Maternity Leave') {
+        const requestedMaternityDays = numberOfDays || 0;
+        const requestedYear = computedStartDate ? computedStartDate.getFullYear() : new Date().getFullYear();
+        const yearStart = new Date(requestedYear, 0, 1);
+        const yearEnd = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+        const existingMaternityLeaves = await Leave.find({
+          staffId,
+          leaveType: 'Maternity Leave',
+          status: { $in: ['Pending', 'Approved', 'For Revision'] },
+          startDate: { $gte: yearStart, $lte: yearEnd },
+        }).select('numberOfDays');
+
+        const usedMaternityDays = existingMaternityLeaves.reduce((sum, l) => sum + (l.numberOfDays || 0), 0);
+        if (usedMaternityDays + requestedMaternityDays > 105) {
+          return res.status(400).json({
+            message: `You have already filed ${usedMaternityDays} day(s) of Maternity Leave for ${requestedYear}. Maximum allowed is 105 days per year.`,
+          });
         }
       }
 
@@ -2721,7 +6007,7 @@ app.post('/leaves', verifyToken, async (req, res) => {
 // Get leave requests for approvers (Head Officer for department, Admin for final review)
 app.get('/leaves', verifyToken, async (req, res) => {
   try {
-    const userRole = req.user.role;
+    const userRole = normalizeRole(req.user.role);
     const userDepartment = req.user.department;
     const canView = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER, ROLES.MUNICIPAL_BUDGET_OFFICER].includes(userRole);
 
@@ -2751,8 +6037,9 @@ app.get('/leaves', verifyToken, async (req, res) => {
 // Get leave requests by staff (Staff own only, Admin can see all)
 app.get('/leaves/staff/:staffId', verifyToken, async (req, res) => {
   try {
+    const userRole = normalizeRole(req.user.role);
     // Staff can only view their own leaves
-    if (req.user.role === 'staff' && req.user.staffId !== req.params.staffId) {
+    if (userRole === ROLES.STAFF && req.user.staffId !== req.params.staffId) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -2856,6 +6143,98 @@ app.put('/leaves/:leaveId', verifyToken, async (req, res) => {
     if (communicationNotRequested !== undefined) leave.communicationNotRequested = Boolean(communicationNotRequested);
     if (communicationRequested !== undefined) leave.communicationRequested = Boolean(communicationRequested);
     if (req.body.lateFilingExplanation !== undefined) leave.lateFilingExplanation = req.body.lateFilingExplanation;
+
+    // Enforce 7-day annual limit for Paternity Leave on updates/resubmission as well.
+    const effectiveLeaveType = leaveType || leave.leaveType;
+    if (effectiveLeaveType === 'Mandatory/Force Leave') {
+      if (Number(leave.numberOfDays) > FORCE_LEAVE_MAX_DAYS_PER_APPLICATION) {
+        return res.status(400).json({
+          message: `You cannot file more than ${FORCE_LEAVE_MAX_DAYS_PER_APPLICATION} days of Force Leave in one application.`,
+        });
+      }
+
+      const requestedYear = resolveLeaveCalendarYear(leave);
+      const approvedForceLeaves = await Leave.find({
+        leaveId: { $ne: leave.leaveId },
+        staffId: leave.staffId,
+        leaveType: 'Mandatory/Force Leave',
+        status: 'Approved',
+      }).select('startDate dateRanges filingDate createdAt numberOfDays');
+      const usedForceLeaveDays = approvedForceLeaves.reduce((sum, approvedLeave) => (
+        resolveLeaveCalendarYear(approvedLeave) === requestedYear
+          ? sum + (Number(approvedLeave.numberOfDays) || 0)
+          : sum
+      ), 0);
+
+      if (usedForceLeaveDays + (Number(leave.numberOfDays) || 0) > 5) {
+        return res.status(400).json({
+          message: `You have already used ${usedForceLeaveDays} approved Force Leave day(s) in ${requestedYear}. Maximum allowed is 5 days per year.`,
+        });
+      }
+    }
+
+    if (normalizeLeaveTypeKey(effectiveLeaveType) === 'wellness') {
+      const requestedYear = resolveLeaveCalendarYear(leave);
+      const usedWellnessDays = await getApprovedLeaveDaysForYear({
+        staffId: leave.staffId,
+        leaveTypes: ['Wellness', 'wellness', 'Wellness Leave'],
+        year: requestedYear,
+        excludeLeaveId: leave.leaveId,
+      });
+
+      if (usedWellnessDays + (Number(leave.numberOfDays) || 0) > WELLNESS_ANNUAL_LIMIT) {
+        return res.status(400).json({
+          message: `You have already used ${usedWellnessDays} approved Wellness Leave day(s) in ${requestedYear}. Maximum allowed is ${WELLNESS_ANNUAL_LIMIT} days per year.`,
+        });
+      }
+    }
+
+    if (effectiveLeaveType === 'Paternity Leave' || effectiveLeaveType === 'Peternity Leave') {
+      const requestedPaternityDays = leave.numberOfDays || 0;
+      const requestedStartDate = leave.startDate ? new Date(leave.startDate) : new Date();
+      const requestedYear = Number.isNaN(requestedStartDate.getTime()) ? new Date().getFullYear() : requestedStartDate.getFullYear();
+      const yearStart = new Date(requestedYear, 0, 1);
+      const yearEnd = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+      const existingPaternityLeaves = await Leave.find({
+        leaveId: { $ne: leave.leaveId },
+        staffId: leave.staffId,
+        leaveType: { $in: ['Paternity Leave', 'Peternity Leave'] },
+        status: { $in: ['Pending', 'Approved', 'For Revision'] },
+        startDate: { $gte: yearStart, $lte: yearEnd },
+      }).select('numberOfDays');
+
+      const usedPaternityDays = existingPaternityLeaves.reduce((sum, l) => sum + (l.numberOfDays || 0), 0);
+      if (usedPaternityDays + requestedPaternityDays > 7) {
+        return res.status(400).json({
+          message: `You have already filed ${usedPaternityDays} day(s) of Paternity Leave for ${requestedYear}. Maximum allowed is 7 days per year.`,
+        });
+      }
+    }
+
+    // Enforce 105-day annual limit for Maternity Leave on updates/resubmission as well.
+    if (effectiveLeaveType === 'Maternity Leave') {
+      const requestedMaternityDays = leave.numberOfDays || 0;
+      const requestedStartDate = leave.startDate ? new Date(leave.startDate) : new Date();
+      const requestedYear = Number.isNaN(requestedStartDate.getTime()) ? new Date().getFullYear() : requestedStartDate.getFullYear();
+      const yearStart = new Date(requestedYear, 0, 1);
+      const yearEnd = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+      const existingMaternityLeaves = await Leave.find({
+        leaveId: { $ne: leave.leaveId },
+        staffId: leave.staffId,
+        leaveType: 'Maternity Leave',
+        status: { $in: ['Pending', 'Approved', 'For Revision'] },
+        startDate: { $gte: yearStart, $lte: yearEnd },
+      }).select('numberOfDays');
+
+      const usedMaternityDays = existingMaternityLeaves.reduce((sum, l) => sum + (l.numberOfDays || 0), 0);
+      if (usedMaternityDays + requestedMaternityDays > 105) {
+        return res.status(400).json({
+          message: `You have already filed ${usedMaternityDays} day(s) of Maternity Leave for ${requestedYear}. Maximum allowed is 105 days per year.`,
+        });
+      }
+    }
 
     const filingStaff = await Staff.findOne({ id: leave.staffId }).select('role');
     const filerRole = normalizeRole(filingStaff?.role);
@@ -3015,6 +6394,55 @@ app.patch('/leaves/:leaveId/approve', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'Leave request must be approved by the Head Officer first' });
     }
 
+    // Enforce annual limits for leave types at approval time as well.
+    const normalizedLeaveTypeForApproval = String(leave.leaveType || '').trim();
+    const leaveTypeAnnualLimits = {
+      'Mandatory/Force Leave': 5,
+      Wellness: WELLNESS_ANNUAL_LIMIT,
+      'Paternity Leave': 7,
+      'Peternity Leave': 7,
+      'Maternity Leave': 105,
+    };
+    const annualLimit = leaveTypeAnnualLimits[normalizedLeaveTypeForApproval];
+
+    if (annualLimit) {
+      const targetYear = resolveLeaveCalendarYear(leave);
+      const leaveTypeGroup = normalizedLeaveTypeForApproval === 'Mandatory/Force Leave'
+        ? ['Mandatory/Force Leave']
+        : normalizeLeaveTypeKey(normalizedLeaveTypeForApproval) === 'wellness'
+          ? ['Wellness', 'wellness', 'Wellness Leave']
+          : normalizedLeaveTypeForApproval === 'Maternity Leave'
+            ? ['Maternity Leave']
+            : ['Paternity Leave', 'Peternity Leave'];
+
+      const approvedTypeLeaves = await Leave.find({
+        leaveId: { $ne: leave.leaveId },
+        staffId: leave.staffId,
+        status: 'Approved',
+        leaveType: { $in: leaveTypeGroup },
+      }).select('startDate dateRanges filingDate createdAt numberOfDays');
+
+      const usedDays = approvedTypeLeaves.reduce((sum, approvedLeave) => {
+        const leaveYear = resolveLeaveCalendarYear(approvedLeave);
+        if (leaveYear !== targetYear) return sum;
+        return sum + (Number(approvedLeave.numberOfDays) || 0);
+      }, 0);
+
+      const requestedDays = Number(leave.numberOfDays) || 0;
+      if (usedDays + requestedDays > annualLimit) {
+        const leaveLabel = normalizedLeaveTypeForApproval === 'Mandatory/Force Leave'
+          ? 'Force Leave'
+          : normalizeLeaveTypeKey(normalizedLeaveTypeForApproval) === 'wellness'
+            ? 'Wellness Leave'
+          : normalizedLeaveTypeForApproval === 'Maternity Leave'
+            ? 'Maternity Leave'
+            : 'Paternity Leave';
+        return res.status(400).json({
+          message: `Approval blocked: staff already has ${usedDays} approved ${leaveLabel} day(s) in ${targetYear}. Maximum allowed is ${annualLimit} days per year.`,
+        });
+      }
+    }
+
     leave.status = 'Approved';
     leave.approvedBy = approvedBy;
     leave.approvalDate = Date.now();
@@ -3166,6 +6594,10 @@ app.post('/travel-orders', verifyToken, async (req, res) => {
     activitySponsoredBy,
     officialBusiness,
     officialTime,
+    meeting,
+    travel,
+    training,
+    seminar,
     expensesCovered,
     fundSourcePapCode,
     recommendingApproval,
@@ -3250,6 +6682,10 @@ app.post('/travel-orders', verifyToken, async (req, res) => {
       periodCoveredTo: periodCoveredTo || null,
       officialBusiness: Boolean(officialBusiness),
       officialTime: Boolean(officialTime),
+      meeting: Boolean(meeting),
+      travel: Boolean(travel),
+      training: Boolean(training),
+      seminar: Boolean(seminar),
       venueDestination: venueDestination || null,
       expensesCovered: expensesCovered || null,
       fundSourcePapCode: fundSourcePapCode || normalizedFundSource || null,
@@ -3292,7 +6728,7 @@ app.post('/travel-orders', verifyToken, async (req, res) => {
 // Get travel orders for approvers (Head Officer for department, Admin for final review)
 app.get('/travel-orders', verifyToken, async (req, res) => {
   try {
-    const userRole = req.user.role;
+    const userRole = normalizeRole(req.user.role);
     const userDepartment = req.user.department;
     const canView = [ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER, ROLES.MUNICIPAL_BUDGET_OFFICER].includes(userRole);
 
@@ -3322,8 +6758,9 @@ app.get('/travel-orders', verifyToken, async (req, res) => {
 // Get travel orders by staff (Staff own only, Admin can see all)
 app.get('/travel-orders/staff/:staffId', verifyToken, async (req, res) => {
   try {
+    const userRole = normalizeRole(req.user.role);
     // Staff can only view their own travel orders
-    if (req.user.role === 'staff' && req.user.staffId !== req.params.staffId) {
+    if (userRole === ROLES.STAFF && req.user.staffId !== req.params.staffId) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -3377,6 +6814,10 @@ app.put('/travel-orders/:travelOrderId', verifyToken, async (req, res) => {
     activitySponsoredBy,
     officialBusiness,
     officialTime,
+    meeting,
+    travel,
+    training,
+    seminar,
     expensesCovered,
     fundSourcePapCode,
     recommendingApproval,
@@ -3451,6 +6892,10 @@ app.put('/travel-orders/:travelOrderId', verifyToken, async (req, res) => {
     travelOrder.periodCoveredTo = periodCoveredTo || travelOrder.periodCoveredTo || null;
     travelOrder.officialBusiness = typeof officialBusiness === 'boolean' ? officialBusiness : Boolean(travelOrder.officialBusiness);
     travelOrder.officialTime = typeof officialTime === 'boolean' ? officialTime : Boolean(travelOrder.officialTime);
+    travelOrder.meeting = typeof meeting === 'boolean' ? meeting : Boolean(travelOrder.meeting);
+    travelOrder.travel = typeof travel === 'boolean' ? travel : Boolean(travelOrder.travel);
+    travelOrder.training = typeof training === 'boolean' ? training : Boolean(travelOrder.training);
+    travelOrder.seminar = typeof seminar === 'boolean' ? seminar : Boolean(travelOrder.seminar);
     travelOrder.venueDestination = venueDestination || travelOrder.venueDestination || null;
     travelOrder.expensesCovered = expensesCovered || travelOrder.expensesCovered || null;
     travelOrder.fundSourcePapCode = fundSourcePapCode || normalizedFundSource || travelOrder.fundSourcePapCode || travelOrder.fundSource || null;
@@ -3898,8 +7343,9 @@ app.get('/overtimes', verifyToken, async (req, res) => {
 // Get overtime requests by staff
 app.get('/overtimes/staff/:staffId', verifyToken, async (req, res) => {
   try {
+    const userRole = normalizeRole(req.user.role);
     // Staff can only view their own requests
-    if (req.user.role === 'staff' && req.user.staffId !== req.params.staffId) {
+    if (userRole === ROLES.STAFF && req.user.staffId !== req.params.staffId) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -4421,10 +7867,727 @@ app.delete('/overtimes/:overtimeId', verifyToken, async (req, res) => {
   }
 });
 
+// ==================== COE (CERTIFICATE OF EMPLOYMENT) ROUTES ====================
+
+const addCOEStaffDetails = async (coes) => {
+  const staffIds = [...new Set(coes.map((coe) => coe.staffId).filter(Boolean))];
+  if (!staffIds.length) return coes.map((coe) => ({ ...coe, staffDetails: {} }));
+
+  const staffRecords = await Staff.find({ id: { $in: staffIds } })
+    .select('id address department position employmentStatus lengthOfService monthlyBasicSalary peraRata grossSalary pendingAdministrativeCase pendingCriminalCase')
+    .lean();
+  const staffById = new Map(staffRecords.map((staff) => [staff.id, staff]));
+
+  return coes.map((coe) => ({
+    ...coe,
+    staffDetails: staffById.get(coe.staffId) || {},
+  }));
+};
+
+// Create COE request
+app.post('/coes', verifyToken, uploadPaymentProof.single('proofOfPayment'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'Proof of payment is required. Upload a PDF, JPG, or PNG file up to 10 MB.' });
+  }
+
+  const {
+    coeId,
+    staffId,
+    fullName,
+    purpose,
+    dateOfApplication,
+    positionTitle,
+    office,
+    address,
+    employmentStatus,
+    lengthOfService,
+    monthlySalary,
+    peraRata,
+    grossSalary,
+    pendingAdministrativeCase,
+    pendingCriminalCase,
+    periodFrom,
+    periodTo,
+    numberOfCopies,
+    remarks,
+  } = req.body;
+
+  // Staff can only file COE request for themselves
+  if (req.user.role === 'staff' && req.user.staffId !== staffId) {
+    removeUploadedPaymentProof(req.file);
+    return res.status(403).json({ message: 'You can only file COE requests for yourself' });
+  }
+
+  if (!coeId || !staffId || !fullName || !purpose || !dateOfApplication) {
+    removeUploadedPaymentProof(req.file);
+    return res.status(400).json({ message: 'All required fields must be provided' });
+  }
+
+  try {
+    const existing = await COE.findOne({ coeId });
+    if (existing) {
+      removeUploadedPaymentProof(req.file);
+      return res.status(409).json({ message: 'COE with this ID already exists' });
+    }
+
+    const staff = await Staff.findOne({ id: staffId }).select('department name');
+    const staffDepartment = staff?.department || req.user.department || null;
+    const staffName = staff?.name || fullName || '';
+
+    const newCOE = new COE({
+      coeId,
+      staffId,
+      staffName,
+      staffDepartment,
+      fullName,
+      purpose,
+      dateOfApplication: new Date(dateOfApplication),
+      positionTitle,
+      office,
+      monthlySalary: monthlySalary ? Number(monthlySalary) : null,
+      address: address || '',
+      employmentStatus: employmentStatus || '',
+      lengthOfService: lengthOfService || '',
+      peraRata: peraRata || '',
+      grossSalary: grossSalary == null || grossSalary === '' ? null : Number(grossSalary),
+      pendingAdministrativeCase: pendingAdministrativeCase === true || pendingAdministrativeCase === 'true'
+        ? true
+        : (pendingAdministrativeCase === false || pendingAdministrativeCase === 'false' ? false : null),
+      pendingCriminalCase: pendingCriminalCase === true || pendingCriminalCase === 'true'
+        ? true
+        : (pendingCriminalCase === false || pendingCriminalCase === 'false' ? false : null),
+      periodFrom: periodFrom ? new Date(periodFrom) : null,
+      periodTo: periodTo ? new Date(periodTo) : null,
+      numberOfCopies: numberOfCopies || 1,
+      remarks: remarks || '',
+      paymentProof: getPaymentProofMetadata(req.file),
+      status: 'Pending',
+    });
+
+    await newCOE.save();
+
+    await createSystemLogEntry({
+      module: 'COE Request',
+      action: 'Create',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `COE request created: ${coeId} by ${staffName}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: { coeId, staffId, staffName },
+    });
+
+    res.status(201).json({ message: 'COE request created successfully', coe: newCOE });
+  } catch (error) {
+    removeUploadedPaymentProof(req.file);
+    console.error('Error creating COE request:', error);
+    res.status(500).json({ message: 'Failed to create COE request' });
+  }
+});
+
+// Get all COE requests (Admin only)
+app.get('/coes', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { status } = req.query;
+  try {
+    const managedStaff = await getDepartmentStaff(req.user);
+    const query = {
+      ...(status && status !== '' ? { status } : {}),
+      ...(managedStaff ? { staffId: { $in: managedStaff.map((staff) => staff.id).filter(Boolean) } } : {}),
+    };
+    const coes = await COE.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json(await addCOEStaffDetails(coes));
+  } catch (error) {
+    console.error('Error fetching COE requests:', error);
+    res.status(500).json({ message: 'Failed to fetch COE requests' });
+  }
+});
+
+// Get COE requests for a specific staff member
+app.get('/coes/staff/:staffId', verifyToken, async (req, res) => {
+  const { staffId } = req.params;
+
+  // Staff can only view their own requests
+  if (normalizeRole(req.user.role) === ROLES.STAFF && req.user.staffId !== staffId) {
+    return res.status(403).json({ message: 'You can only view your own COE requests' });
+  }
+  if (isDepartmentStaffManager(req.user) && !(await canManageStaffId(req.user, staffId))) {
+    return res.status(403).json({ message: 'You can only view COE requests for staff in your department.' });
+  }
+
+  try {
+    const coes = await COE.find({ staffId })
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json(await addCOEStaffDetails(coes));
+  } catch (error) {
+    console.error('Error fetching COE requests:', error);
+    res.status(500).json({ message: 'Failed to fetch COE requests' });
+  }
+});
+
+// Approve COE request (Admin only)
+app.patch('/coes/:coeId/approve', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { approvalRemarks } = req.body;
+
+  try {
+    const coe = await COE.findOne({ coeId: req.params.coeId });
+
+    if (!coe) {
+      return res.status(404).json({ message: 'COE request not found' });
+    }
+    if (!(await canManageStaffId(req.user, coe.staffId))) {
+      return res.status(403).json({ message: 'You can only review COE requests for staff in your department.' });
+    }
+
+    if (coe.status !== 'Pending') {
+      return res.status(400).json({ message: 'COE request is already processed' });
+    }
+
+    coe.status = 'Approved';
+    coe.approvedBy = req.user.name || req.user.email || 'Admin';
+    coe.approvalDate = Date.now();
+    coe.approvalRemarks = approvalRemarks || '';
+    coe.updatedAt = Date.now();
+    await coe.save();
+
+    await createSystemLogEntry({
+      module: 'COE Request',
+      action: 'Approve',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `COE request approved: ${coe.coeId}. Employee should fetch at HR Office.`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: {
+        coeId: coe.coeId,
+        staffId: coe.staffId,
+        approver: req.user.name || req.user.email,
+      },
+    });
+
+    res.status(200).json({ 
+      message: 'COE request approved. Employee notified to fetch Certificate of Employment at HR Office.',
+      coe 
+    });
+  } catch (error) {
+    console.error('Error approving COE request:', error);
+    res.status(500).json({ message: 'Failed to approve COE request' });
+  }
+});
+
+// Disapprove COE request (Admin only)
+app.patch('/coes/:coeId/disapprove', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { disapprovalRemarks } = req.body;
+
+  try {
+    const coe = await COE.findOne({ coeId: req.params.coeId });
+
+    if (!coe) {
+      return res.status(404).json({ message: 'COE request not found' });
+    }
+    if (!(await canManageStaffId(req.user, coe.staffId))) {
+      return res.status(403).json({ message: 'You can only review COE requests for staff in your department.' });
+    }
+
+    if (coe.status !== 'Pending') {
+      return res.status(400).json({ message: 'COE request is already processed' });
+    }
+
+    coe.status = 'Disapproved';
+    coe.disapprovedBy = req.user.name || req.user.email || 'Admin';
+    coe.disapprovalDate = Date.now();
+    coe.disapprovalRemarks = disapprovalRemarks || '';
+    coe.updatedAt = Date.now();
+    await coe.save();
+
+    await createSystemLogEntry({
+      module: 'COE Request',
+      action: 'Disapprove',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `COE request disapproved: ${coe.coeId}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: {
+        coeId: coe.coeId,
+        staffId: coe.staffId,
+        disapprover: req.user.name || req.user.email,
+      },
+    });
+
+    res.status(200).json({ message: 'COE request disapproved', coe });
+  } catch (error) {
+    console.error('Error disapproving COE request:', error);
+    res.status(500).json({ message: 'Failed to disapprove COE request' });
+  }
+});
+
+// Request revision for COE (Admin only)
+app.patch('/coes/:coeId/revise', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { revisionComment } = req.body;
+
+  if (!revisionComment) {
+    return res.status(400).json({ message: 'Revision comment is required' });
+  }
+
+  try {
+    const coe = await COE.findOne({ coeId: req.params.coeId });
+
+    if (!coe) {
+      return res.status(404).json({ message: 'COE request not found' });
+    }
+    if (!(await canManageStaffId(req.user, coe.staffId))) {
+      return res.status(403).json({ message: 'You can only review COE requests for staff in your department.' });
+    }
+
+    if (coe.status !== 'Pending') {
+      return res.status(400).json({ message: 'Only pending COE requests can be sent for revision' });
+    }
+
+    coe.status = 'For Revision';
+    coe.revisionRequestedBy = req.user.name || req.user.email || 'Admin';
+    coe.revisionRequestedByRole = req.user.role;
+    coe.revisionRequestedAt = Date.now();
+    coe.revisionComment = revisionComment;
+    coe.updatedAt = Date.now();
+    await coe.save();
+
+    await createSystemLogEntry({
+      module: 'COE Request',
+      action: 'Revise',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `COE request sent for revision: ${coe.coeId}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: {
+        coeId: coe.coeId,
+        staffId: coe.staffId,
+        revisionComment,
+      },
+    });
+
+    res.status(200).json({ message: 'COE request sent for revision', coe });
+  } catch (error) {
+    console.error('Error requesting revision for COE:', error);
+    res.status(500).json({ message: 'Failed to request revision for COE' });
+  }
+});
+
+// Delete COE request
+app.delete('/coes/:coeId', verifyToken, async (req, res) => {
+  try {
+    const coe = await COE.findOne({ coeId: req.params.coeId });
+
+    if (!coe) {
+      return res.status(404).json({ message: 'COE request not found' });
+    }
+
+    const userRole = normalizeRole(req.user.role);
+    const isDepartmentManager = isDepartmentStaffManager(req.user);
+    if (isDepartmentManager && !(await canManageStaffId(req.user, coe.staffId))) {
+      return res.status(403).json({ message: 'You can only manage COE requests for staff in your department.' });
+    }
+
+    // Staff can only delete their own pending requests
+    if (userRole === ROLES.STAFF) {
+      if (req.user.staffId !== coe.staffId) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      if (coe.status !== 'Pending') {
+        return res.status(400).json({ message: 'Can only delete pending requests' });
+      }
+    }
+
+    // Admin can delete any request (preferably only Pending or For Revision)
+    if (!isDepartmentManager) {
+      if (req.user.staffId !== coe.staffId || coe.status !== 'Pending') {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    await COE.findOneAndDelete({ coeId: req.params.coeId });
+    if (coe.paymentProof?.storageName) {
+      const proofPath = path.join(PAYMENT_PROOF_UPLOAD_DIR, path.basename(coe.paymentProof.storageName));
+      if (fs.existsSync(proofPath)) fs.unlinkSync(proofPath);
+    }
+
+    await createSystemLogEntry({
+      module: 'COE Request',
+      action: 'Delete',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `COE request deleted: ${coe.coeId}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: { coeId: coe.coeId, staffId: coe.staffId },
+    });
+
+    res.status(200).json({ message: 'COE request deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting COE request:', error);
+    res.status(500).json({ message: 'Failed to delete COE request' });
+  }
+});
+
+// ==================== CERTIFICATE OF NO PENDING CASE REQUEST ROUTES ====================
+
+app.post('/no-pendency-requests', verifyToken, uploadPaymentProof.single('proofOfPayment'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'Proof of payment is required. Upload a PDF, JPG, or PNG file up to 10 MB.' });
+  }
+
+  const staffId = req.user.staffId;
+  const { fullName, position, pendingCase, dateOfApplication } = req.body;
+
+  if (
+    !staffId ||
+    typeof fullName !== 'string' ||
+    !fullName.trim() ||
+    typeof position !== 'string' ||
+    !position.trim() ||
+    !['Yes', 'No'].includes(pendingCase) ||
+    !dateOfApplication
+  ) {
+    removeUploadedPaymentProof(req.file);
+    return res.status(400).json({ message: 'Full name, position, a Yes or No pending-case answer, and application date are required.' });
+  }
+
+  const applicationDate = new Date(dateOfApplication);
+  if (Number.isNaN(applicationDate.getTime())) {
+    removeUploadedPaymentProof(req.file);
+    return res.status(400).json({ message: 'A valid application date is required.' });
+  }
+
+  try {
+    const staff = await Staff.findOne({ id: staffId }).select('name department').lean();
+    if (!staff) {
+      removeUploadedPaymentProof(req.file);
+      return res.status(404).json({ message: 'Staff account not found.' });
+    }
+
+    const request = await NoPendencyRequest.create({
+      requestId: new mongoose.Types.ObjectId().toString(),
+      staffId,
+      staffName: staff.name || fullName.trim(),
+      staffDepartment: staff.department || '',
+      fullName: fullName.trim(),
+      position: position.trim(),
+      pendingCase,
+      dateOfApplication: applicationDate,
+      paymentProof: getPaymentProofMetadata(req.file),
+    });
+
+    await createSystemLogEntry({
+      module: 'Certificate of No Pending Case',
+      action: 'Create',
+      user: req.user.name || req.user.email || 'System',
+      userId: staffId,
+      description: `Certificate of No Pending Case request submitted by ${request.staffName}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: { requestId: request.requestId, staffId },
+    });
+
+    res.status(201).json({ message: 'Certificate request submitted successfully.', request });
+  } catch (error) {
+    removeUploadedPaymentProof(req.file);
+    console.error('Error creating no-pendency certificate request:', error);
+    res.status(500).json({ message: 'Failed to submit certificate request.' });
+  }
+});
+
+app.get('/no-pendency-requests', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { status } = req.query;
+  try {
+    const managedStaff = await getDepartmentStaff(req.user);
+    const query = {
+      ...(status && status !== '' ? { status } : {}),
+      ...(managedStaff ? { staffId: { $in: managedStaff.map((staff) => staff.id).filter(Boolean) } } : {}),
+    };
+    const requests = await NoPendencyRequest.find(query).sort({ createdAt: -1 }).lean();
+    res.status(200).json(requests);
+  } catch (error) {
+    console.error('Error fetching no-pendency certificate requests:', error);
+    res.status(500).json({ message: 'Failed to fetch certificate requests.' });
+  }
+});
+
+app.get('/no-pendency-requests/staff/:staffId', verifyToken, async (req, res) => {
+  const { staffId } = req.params;
+  if (req.user.staffId !== staffId && !isDepartmentStaffManager(req.user)) {
+    return res.status(403).json({ message: 'You can only view your own certificate requests.' });
+  }
+  if (isDepartmentStaffManager(req.user) && !(await canManageStaffId(req.user, staffId))) {
+    return res.status(403).json({ message: 'You can only view certificate requests for staff in your department.' });
+  }
+
+  try {
+    const requests = await NoPendencyRequest.find({ staffId }).sort({ createdAt: -1 }).lean();
+    res.status(200).json(requests);
+  } catch (error) {
+    console.error('Error fetching staff no-pendency certificate requests:', error);
+    res.status(500).json({ message: 'Failed to fetch certificate requests.' });
+  }
+});
+
+app.patch('/no-pendency-requests/:requestId/:decision', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
+  const { decision } = req.params;
+  const { remarks = '' } = req.body;
+  if (!['approve', 'disapprove'].includes(decision)) {
+    return res.status(404).json({ message: 'Certificate request action not found.' });
+  }
+
+  try {
+    const request = await NoPendencyRequest.findOne({ requestId: req.params.requestId });
+    if (!request) {
+      return res.status(404).json({ message: 'Certificate request not found.' });
+    }
+    if (!(await canManageStaffId(req.user, request.staffId))) {
+      return res.status(403).json({ message: 'You can only review certificate requests for staff in your department.' });
+    }
+    if (request.status !== 'Pending') {
+      return res.status(400).json({ message: 'Only pending certificate requests can be reviewed.' });
+    }
+
+    request.status = decision === 'approve' ? 'Approved' : 'Disapproved';
+    request.reviewedBy = req.user.name || req.user.email || 'Admin';
+    request.reviewDate = new Date();
+    request.reviewRemarks = String(remarks).trim();
+    request.updatedAt = new Date();
+    await request.save();
+
+    await createSystemLogEntry({
+      module: 'Certificate of No Pending Case',
+      action: decision === 'approve' ? 'Approve' : 'Disapprove',
+      user: req.user.name || req.user.email || 'System',
+      userId: req.user.staffId,
+      description: `Certificate request ${request.status.toLowerCase()}: ${request.requestId}`,
+      ipAddress: getRequestIp(req),
+      status: 'Success',
+      metadata: { requestId: request.requestId, staffId: request.staffId },
+    });
+
+    res.status(200).json({ message: `Certificate request ${request.status.toLowerCase()}.`, request });
+  } catch (error) {
+    console.error('Error reviewing no-pendency certificate request:', error);
+    res.status(500).json({ message: 'Failed to review certificate request.' });
+  }
+});
+
+app.post(
+  '/no-leave-without-pay-certificates',
+  verifyToken,
+  uploadPaymentProof.single('proofOfPayment'),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Proof of payment is required. Upload a PDF, JPG, or PNG file up to 10 MB.' });
+    }
+
+    const staffId = req.user.staffId;
+    const { fullName, position, periodFrom, periodTo, dateOfApplication } = req.body;
+    const fromDate = new Date(periodFrom);
+    const toDate = new Date(periodTo);
+    const applicationDate = new Date(dateOfApplication);
+
+    if (
+      !staffId
+      || typeof fullName !== 'string'
+      || !fullName.trim()
+      || typeof position !== 'string'
+      || !position.trim()
+      || !periodFrom
+      || !periodTo
+      || Number.isNaN(fromDate.getTime())
+      || Number.isNaN(toDate.getTime())
+      || fromDate > toDate
+      || Number.isNaN(applicationDate.getTime())
+    ) {
+      removeUploadedPaymentProof(req.file);
+      return res.status(400).json({ message: 'Full name, position, a valid leave-without-pay date range, and application date are required.' });
+    }
+
+    try {
+      const staff = await Staff.findOne({ id: staffId }).select('name department').lean();
+      if (!staff) {
+        removeUploadedPaymentProof(req.file);
+        return res.status(404).json({ message: 'Staff account not found.' });
+      }
+
+      const request = await NoLeaveWithoutPayCertificate.create({
+        requestId: new mongoose.Types.ObjectId().toString(),
+        staffId,
+        staffName: staff.name || fullName.trim(),
+        staffDepartment: staff.department || '',
+        fullName: fullName.trim(),
+        position: position.trim(),
+        periodFrom: fromDate,
+        periodTo: toDate,
+        dateOfApplication: applicationDate,
+        paymentProof: getPaymentProofMetadata(req.file),
+      });
+
+      await createSystemLogEntry({
+        module: 'Certificate of No Leave Without Pay',
+        action: 'Create',
+        user: req.user.name || req.user.email || 'System',
+        userId: staffId,
+        description: `Certificate of No Leave Without Pay request submitted by ${request.staffName}`,
+        ipAddress: getRequestIp(req),
+        status: 'Success',
+        metadata: { requestId: request.requestId, staffId },
+      });
+
+      return res.status(201).json({ message: 'Certificate request submitted successfully.', request });
+    } catch (error) {
+      removeUploadedPaymentProof(req.file);
+      console.error('Error creating no-leave-without-pay certificate request:', error);
+      return res.status(500).json({ message: 'Failed to submit certificate request.' });
+    }
+  }
+);
+
+app.get(
+  '/no-leave-without-pay-certificates',
+  verifyToken,
+  requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]),
+  async (req, res) => {
+    try {
+      const managedStaff = await getDepartmentStaff(req.user);
+      const query = {
+        ...(req.query.status ? { status: req.query.status } : {}),
+        ...(managedStaff ? { staffId: { $in: managedStaff.map((staff) => staff.id).filter(Boolean) } } : {}),
+      };
+      const requests = await NoLeaveWithoutPayCertificate.find(query).sort({ createdAt: -1 }).lean();
+      return res.json(requests);
+    } catch (error) {
+      console.error('Error fetching no-leave-without-pay certificate requests:', error);
+      return res.status(500).json({ message: 'Failed to fetch certificate requests.' });
+    }
+  }
+);
+
+app.get('/no-leave-without-pay-certificates/staff/:staffId', verifyToken, async (req, res) => {
+  const isManager = isDepartmentStaffManager(req.user);
+  if (!isManager && String(req.user?.staffId) !== String(req.params.staffId)) {
+    return res.status(403).json({ message: 'You can only view your own certificate requests.' });
+  }
+  if (isManager && !(await canManageStaffId(req.user, req.params.staffId))) {
+    return res.status(403).json({ message: 'You can only view certificate requests for staff in your department.' });
+  }
+
+  try {
+    const requests = await NoLeaveWithoutPayCertificate.find({ staffId: req.params.staffId })
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.json(requests);
+  } catch (error) {
+    console.error('Error fetching staff no-leave-without-pay certificate requests:', error);
+    return res.status(500).json({ message: 'Failed to fetch certificate requests.' });
+  }
+});
+
+app.patch(
+  '/no-leave-without-pay-certificates/:requestId/:decision',
+  verifyToken,
+  requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]),
+  async (req, res) => {
+    const { decision } = req.params;
+    if (!['approve', 'disapprove'].includes(decision)) {
+      return res.status(404).json({ message: 'Certificate request action not found.' });
+    }
+
+    try {
+      const request = await NoLeaveWithoutPayCertificate.findOne({ requestId: req.params.requestId });
+      if (!request) {
+        return res.status(404).json({ message: 'Certificate request not found.' });
+      }
+      if (!(await canManageStaffId(req.user, request.staffId))) {
+        return res.status(403).json({ message: 'You can only review certificate requests for staff in your department.' });
+      }
+      if (request.status !== 'Pending') {
+        return res.status(400).json({ message: 'Only pending certificate requests can be reviewed.' });
+      }
+
+      request.status = decision === 'approve' ? 'Approved' : 'Disapproved';
+      request.reviewedBy = req.user.name || req.user.email || 'Admin';
+      request.reviewDate = new Date();
+      request.reviewRemarks = String(req.body.remarks || '').trim();
+      request.updatedAt = new Date();
+      await request.save();
+
+      await createSystemLogEntry({
+        module: 'Certificate of No Leave Without Pay',
+        action: decision === 'approve' ? 'Approve' : 'Disapprove',
+        user: req.user.name || req.user.email || 'System',
+        userId: req.user.staffId,
+        description: `Certificate request ${request.status.toLowerCase()}: ${request.requestId}`,
+        ipAddress: getRequestIp(req),
+        status: 'Success',
+        metadata: { requestId: request.requestId, staffId: request.staffId },
+      });
+
+      return res.json({ message: `Certificate request ${request.status.toLowerCase()}.`, request });
+    } catch (error) {
+      console.error('Error reviewing no-leave-without-pay certificate request:', error);
+      return res.status(500).json({ message: 'Failed to review certificate request.' });
+    }
+  }
+);
+
+app.get('/payment-proofs/:requestType/:requestId', verifyToken, async (req, res) => {
+  const isManager = isDepartmentStaffManager(req.user);
+
+  try {
+    let request;
+    if (req.params.requestType === 'coe') {
+      request = await COE.findOne({ coeId: req.params.requestId }).select('staffId paymentProof').lean();
+    } else if (req.params.requestType === 'no-pendency') {
+      request = await NoPendencyRequest.findOne({ requestId: req.params.requestId }).select('staffId paymentProof').lean();
+    } else if (req.params.requestType === 'no-leave-without-pay') {
+      request = await NoLeaveWithoutPayCertificate.findOne({ requestId: req.params.requestId })
+        .select('staffId paymentProof')
+        .lean();
+    } else {
+      return res.status(404).json({ message: 'Payment proof not found.' });
+    }
+
+    if (!request) {
+      return res.status(404).json({ message: 'Certificate request not found.' });
+    }
+    if (!isManager && String(request.staffId) !== String(req.user?.staffId)) {
+      return res.status(403).json({ message: 'You are not allowed to view this payment proof.' });
+    }
+    if (isManager && !(await canManageStaffId(req.user, request.staffId))) {
+      return res.status(403).json({ message: 'You are not allowed to view this payment proof.' });
+    }
+
+    const proof = request.paymentProof;
+    if (!proof?.storageName) {
+      return res.status(404).json({ message: 'Payment proof not found.' });
+    }
+
+    const filePath = path.join(PAYMENT_PROOF_UPLOAD_DIR, path.basename(proof.storageName));
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'The payment proof file is unavailable.' });
+    }
+
+    res.type(proof.mimeType || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(proof.fileName || 'proof-of-payment')}`);
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    console.error('Error retrieving certificate payment proof:', error);
+    return res.status(500).json({ message: 'Failed to retrieve payment proof.' });
+  }
+});
+
 // ==================== SERVICE RECORD ROUTES ====================
 
 // Create service record (Super Admin and Admin/HR only)
-app.post('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.post('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   const { staffId, staffName, designation, status, salary, station, branch, serviceFrom, serviceTo, leaveWithoutPayFrom, leaveWithoutPayTo, remarks } = req.body;
 
   if (!staffId || !serviceFrom) {
@@ -4432,6 +8595,9 @@ app.post('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.
   }
 
   try {
+    if (!(await canManageStaffId(req.user, staffId))) {
+      return res.status(403).json({ message: 'You can only manage service records for staff in your department.' });
+    }
     const recordId = `SR${Date.now()}`;
     const newRecord = new ServiceRecord({
       recordId,
@@ -4458,9 +8624,11 @@ app.post('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.
 });
 
 // Get all service records (Super Admin and Admin/HR only)
-app.get('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.get('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
-    const records = await ServiceRecord.find();
+    const managedStaff = await getDepartmentStaff(req.user);
+    const filter = managedStaff ? { staffId: { $in: managedStaff.map((staff) => staff.id).filter(Boolean) } } : {};
+    const records = await ServiceRecord.find(filter);
     res.json(records);
   } catch (error) {
     console.error('Error fetching service records:', error);
@@ -4468,12 +8636,15 @@ app.get('/service-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.A
   }
 });
 
-// Get service records by staff ID (Staff can only see their own, Admin can see all)
+// Get service records by Item Number (Staff can only see their own, Admin can see all)
 app.get('/service-records/staff/:staffId', verifyToken, async (req, res) => {
   try {
     // Staff can only view their own records
-    if (req.user.role === 'staff' && req.user.staffId !== req.params.staffId) {
+    if (normalizeRole(req.user.role) === ROLES.STAFF && req.user.staffId !== req.params.staffId) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+    if (isDepartmentStaffManager(req.user) && !(await canManageStaffId(req.user, req.params.staffId))) {
+      return res.status(403).json({ message: 'You can only view service records for staff in your department.' });
     }
 
     const records = await ServiceRecord.find({ staffId: req.params.staffId });
@@ -4493,8 +8664,11 @@ app.get('/service-record/:recordId', verifyToken, async (req, res) => {
     }
 
     // Staff can only view their own record
-    if (req.user.role === 'staff' && req.user.staffId !== record.staffId) {
+    if (normalizeRole(req.user.role) === ROLES.STAFF && req.user.staffId !== record.staffId) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+    if (isDepartmentStaffManager(req.user) && !(await canManageStaffId(req.user, record.staffId))) {
+      return res.status(403).json({ message: 'You can only view service records for staff in your department.' });
     }
 
     res.json(record);
@@ -4505,9 +8679,14 @@ app.get('/service-record/:recordId', verifyToken, async (req, res) => {
 });
 
 // Update service record (Super Admin and Admin/HR only)
-app.put('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.put('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
     const { designation, status, salary, station, branch, serviceTo, leaveWithoutPayFrom, leaveWithoutPayTo, remarks } = req.body;
+    const existing = await ServiceRecord.findOne({ recordId: req.params.recordId }).select('staffId').lean();
+    if (!existing) return res.status(404).json({ message: 'Service record not found' });
+    if (!(await canManageStaffId(req.user, existing.staffId))) {
+      return res.status(403).json({ message: 'You can only manage service records for staff in your department.' });
+    }
 
     const updated = await ServiceRecord.findOneAndUpdate(
       { recordId: req.params.recordId },
@@ -4538,12 +8717,16 @@ app.put('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMI
 });
 
 // Delete service record (Super Admin and Admin/HR only)
-app.delete('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.delete('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
-    const deleted = await ServiceRecord.findOneAndDelete({ recordId: req.params.recordId });
-    if (!deleted) {
+    const existing = await ServiceRecord.findOne({ recordId: req.params.recordId }).select('staffId').lean();
+    if (!existing) {
       return res.status(404).json({ message: 'Service record not found' });
     }
+    if (!(await canManageStaffId(req.user, existing.staffId))) {
+      return res.status(403).json({ message: 'You can only manage service records for staff in your department.' });
+    }
+    await ServiceRecord.deleteOne({ recordId: req.params.recordId });
 
     res.status(200).json({ message: 'Service record deleted successfully' });
   } catch (error) {
@@ -4558,6 +8741,13 @@ app.delete('/service-records/:recordId', verifyToken, requireRole([ROLES.SUPER_A
 app.get('/leave-records/staff/:staffId', verifyToken, async (req, res) => {
   try {
     const { staffId } = req.params;
+    const role = normalizeRole(req.user?.role);
+    if (role === ROLES.STAFF && String(req.user?.staffId) !== String(staffId)) {
+      return res.status(403).json({ message: 'You can only view your own leave records.' });
+    }
+    if (isDepartmentStaffManager(req.user) && !(await canManageStaffId(req.user, staffId))) {
+      return res.status(403).json({ message: 'You can only view leave records for staff in your department.' });
+    }
     console.log(`[GET /leave-records/staff/:staffId] Fetching records for staffId: ${staffId}`);
 
     await ensureMonthlyEarnedLeaveCredits({ staffId });
@@ -4580,11 +8770,17 @@ app.get('/leave-records/staff/:staffId', verifyToken, async (req, res) => {
 });
 
 // Get all leave records (Super Admin and Admin/HR only)
-app.get('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.get('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
-    await ensureMonthlyEarnedLeaveCredits();
+    const managedStaff = await getDepartmentStaff(req.user);
+    if (managedStaff) {
+      await Promise.all(managedStaff.map((staff) => ensureMonthlyEarnedLeaveCredits({ staffId: staff.id })));
+    } else {
+      await ensureMonthlyEarnedLeaveCredits();
+    }
 
-    const records = await LeaveRecord.find().sort({ staffId: 1, period: -1 });
+    const filter = managedStaff ? { staffId: { $in: managedStaff.map((staff) => staff.id).filter(Boolean) } } : {};
+    const records = await LeaveRecord.find(filter).sort({ staffId: 1, period: -1 });
     res.status(200).json({ data: records });
   } catch (error) {
     console.error('Error fetching leave records:', error);
@@ -4593,15 +8789,18 @@ app.get('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADM
 });
 
 // Create leave record (Super Admin and Admin/HR only)
-app.post('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.post('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
-    const { staffId, staffName, period, particulars, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto, dateRanges } = req.body;
+    const { staffId, staffName, period, particulars, numberOfDays, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto, dateRanges } = req.body;
     console.log('[POST /leave-records] Creating record with staffId:', staffId);
     console.log('[POST /leave-records] Request body:', { staffId, staffName, period, particulars, dateRanges });
 
     // Require either period (legacy) or dateRanges (new)
     if (!staffId || !particulars || (!period && (!dateRanges || !Array.isArray(dateRanges) || dateRanges.length === 0))) {
       return res.status(400).json({ message: 'staffId, particulars, and period or dateRanges are required' });
+    }
+    if (!(await canManageStaffId(req.user, staffId))) {
+      return res.status(403).json({ message: 'You can only manage leave records for staff in your department.' });
     }
 
     const recordId = `LR-${Date.now()}`;
@@ -4612,6 +8811,7 @@ app.post('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.AD
       period: period ? new Date(period) : undefined,
       dateRanges: dateRanges && Array.isArray(dateRanges) && dateRanges.length > 0 ? dateRanges : undefined,
       particulars,
+      numberOfDays: Number(numberOfDays) || 0,
       vlEarned: parseFloat(vlEarned) || 0,
       vlAbsentUndertimeWPay: parseFloat(vlAbsentUndertimeWPay) || 0,
       slEarned: parseFloat(slEarned) || 0,
@@ -4632,10 +8832,10 @@ app.post('/leave-records', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.AD
 
 
 // Update leave record (Super Admin and Admin/HR only)
-app.put('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.put('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
     const { recordId } = req.params;
-    const { period, particulars, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto, dateRanges } = req.body;
+    const { period, particulars, numberOfDays, vlEarned, vlAbsentUndertimeWPay, slEarned, slAbsentUndertimeWPay, cto, dateRanges } = req.body;
 
     // Build update object
     const updateObj = {
@@ -4647,8 +8847,15 @@ app.put('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN,
       cto,
       updatedAt: Date.now(),
     };
+    if (numberOfDays !== undefined) updateObj.numberOfDays = Number(numberOfDays) || 0;
     if (period) updateObj.period = new Date(period);
     if (dateRanges && Array.isArray(dateRanges)) updateObj.dateRanges = dateRanges;
+
+    const existing = await LeaveRecord.findOne({ recordId }).select('staffId').lean();
+    if (!existing) return res.status(404).json({ message: 'Leave record not found' });
+    if (!(await canManageStaffId(req.user, existing.staffId))) {
+      return res.status(403).json({ message: 'You can only manage leave records for staff in your department.' });
+    }
 
     const updated = await LeaveRecord.findOneAndUpdate(
       { recordId },
@@ -4669,7 +8876,7 @@ app.put('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN,
 
 // ==================== LEAVE RECORD BATCH IMPORT ENDPOINT ====================
 // Batch import leave records (append, do not replace)
-app.post('/leave-records/import', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.post('/leave-records/import', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
     const records = Array.isArray(req.body) ? req.body : [];
     console.error('Batch import: Incoming records:', JSON.stringify(records, null, 2));
@@ -4690,6 +8897,11 @@ app.post('/leave-records/import', verifyToken, requireRole([ROLES.SUPER_ADMIN, R
 
     if (!validRecords.length) {
       return res.status(400).json({ message: 'No valid records to import.', missingFields });
+    }
+    for (const record of validRecords) {
+      if (!(await canManageStaffId(req.user, record.staffId))) {
+        return res.status(403).json({ message: 'Imported leave records must belong to staff in your department.' });
+      }
     }
 
     // Only insert records that do not already exist (by recordId)
@@ -4770,10 +8982,24 @@ app.post('/leave-records/import', verifyToken, requireRole([ROLES.SUPER_ADMIN, R
 });
 
 // Delete leave record (Super Admin and Admin/HR only)
-app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR, ROLES.HEAD_OFFICER]), async (req, res) => {
   try {
     const { recordId } = req.params;
     console.log('Attempting to delete leave record with ID:', recordId);
+
+    const targetRecord = await LeaveRecord.findOne({
+      $or: [{ recordId }, { _id: mongoose.Types.ObjectId.isValid(recordId) ? recordId : null }],
+    }).lean();
+
+    if (!targetRecord) {
+      console.log('Record not found:', recordId);
+      return res.status(404).json({ message: 'Leave record not found' });
+    }
+    if (!(await canManageStaffId(req.user, targetRecord.staffId))) {
+      return res.status(403).json({ message: 'You can only manage leave records for staff in your department.' });
+    }
+
+    const isAutoMonthlyAccrual = targetRecord.source === 'MonthlyAccrual' && targetRecord.autoGenerated;
 
     // First try to find and delete using recordId field
     const deleted = await LeaveRecord.findOneAndDelete(
@@ -4783,6 +9009,25 @@ app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADM
 
     let leaveDeleted = null;
     if (deleted) {
+      if (isAutoMonthlyAccrual) {
+        const monthKey = getMonthKey(deleted.period);
+        if (monthKey) {
+          await MonthlyAccrualExclusion.findOneAndUpdate(
+            { staffId: deleted.staffId, monthKey },
+            {
+              $set: {
+                reason: 'ManualDelete',
+                updatedAt: Date.now(),
+              },
+              $setOnInsert: {
+                createdAt: Date.now(),
+              },
+            },
+            { upsert: true, new: true }
+          );
+        }
+      }
+
       // Also delete the corresponding leave request from Leave collection
       if (deleted.sourceLeaveId) {
         leaveDeleted = await mongoose.model('Leave').findOneAndDelete({ leaveId: deleted.sourceLeaveId });
@@ -4798,6 +9043,25 @@ app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADM
     try {
       const deletedById = await LeaveRecord.findByIdAndDelete(recordId);
       if (deletedById) {
+        if (deletedById.source === 'MonthlyAccrual' && deletedById.autoGenerated) {
+          const monthKey = getMonthKey(deletedById.period);
+          if (monthKey) {
+            await MonthlyAccrualExclusion.findOneAndUpdate(
+              { staffId: deletedById.staffId, monthKey },
+              {
+                $set: {
+                  reason: 'ManualDelete',
+                  updatedAt: Date.now(),
+                },
+                $setOnInsert: {
+                  createdAt: Date.now(),
+                },
+              },
+              { upsert: true, new: true }
+            );
+          }
+        }
+
         // Also delete the corresponding leave request from Leave collection
         if (deletedById.sourceLeaveId) {
           leaveDeleted = await mongoose.model('Leave').findOneAndDelete({ leaveId: deletedById.sourceLeaveId });
@@ -4812,12 +9076,405 @@ app.delete('/leave-records/:recordId', verifyToken, requireRole([ROLES.SUPER_ADM
       // _id deletion failed, continue to not found error
     }
 
-    // Record not found
-    console.log('Record not found:', recordId);
+    // If this happens, the record changed between read and delete.
+    console.log('Record became unavailable during delete:', recordId);
     return res.status(404).json({ message: 'Leave record not found' });
   } catch (error) {
     console.error('Error deleting leave record:', error);
     res.status(500).json({ message: 'Failed to delete leave record', error: error.message });
+  }
+});
+
+// ==================== VAULT ROUTES ====================
+
+app.get('/my-requests', verifyToken, async (req, res) => {
+  const staffId = String(req.user?.staffId || '').trim();
+  if (!staffId) {
+    return res.status(400).json({ message: 'A staff account is required to view request history.' });
+  }
+
+  try {
+    const [leaves, travelOrders, overtimes, coes, noPendencyRequests, noLeaveWithoutPayRequests, profileUpdates, personalDataSheets] = await Promise.all([
+      Leave.find({ staffId }).select('leaveId leaveType startDate endDate numberOfDays status approvalStage revisionComment remarks createdAt updatedAt').lean(),
+      TravelOrder.find({ staffId }).select('travelOrderId destination purpose dateFrom dateTo status approvalStage revisionComment remarks createdAt updatedAt').lean(),
+      Overtime.find({ staffId }).select('overtimeId purposeOfOvertime inclusiveDateStart inclusiveDateEnd status approvalStage revisionComment approvalRemarks createdAt updatedAt').lean(),
+      COE.find({ staffId }).select('coeId purpose dateOfApplication status revisionComment approvalRemarks disapprovalRemarks createdAt updatedAt').lean(),
+      NoPendencyRequest.find({ staffId }).select('requestId dateOfApplication status reviewRemarks createdAt updatedAt').lean(),
+      NoLeaveWithoutPayCertificate.find({ staffId }).select('requestId periodFrom periodTo dateOfApplication status reviewRemarks createdAt updatedAt').lean(),
+      StaffUpdateRequest.find({ staffId }).select('requestId status reviewedBy reviewedAt createdAt updatedAt').lean(),
+      PersonalDataSheet.find({
+        $or: [{ ownerStaffId: staffId }, { submittedByStaffId: staffId }],
+      }).select('pdsId firstName surname status remarks reviewedAt createdAt updatedAt').lean(),
+    ]);
+
+    const toRequest = (type, id, title, submittedAt, status, stage, summary, updatedAt, remarks) => ({
+      id,
+      type,
+      title,
+      submittedAt,
+      status: status || 'Pending',
+      stage: stage || '',
+      summary: summary || '',
+      updatedAt: updatedAt || submittedAt,
+      remarks: remarks || '',
+    });
+
+    const requests = [
+      ...leaves.map((item) => toRequest(
+        'Leave',
+        item.leaveId,
+        item.leaveType || 'Leave Request',
+        item.createdAt,
+        item.status,
+        item.approvalStage,
+        [item.startDate, item.endDate].filter(Boolean).map((date) => new Date(date).toISOString().slice(0, 10)).join(' to '),
+        item.updatedAt,
+        item.revisionComment || item.remarks
+      )),
+      ...travelOrders.map((item) => toRequest(
+        'Travel Order',
+        item.travelOrderId,
+        item.destination || 'Travel Order',
+        item.createdAt,
+        item.status,
+        item.approvalStage,
+        [item.purpose, item.dateFrom && item.dateTo
+          ? `${new Date(item.dateFrom).toISOString().slice(0, 10)} to ${new Date(item.dateTo).toISOString().slice(0, 10)}`
+          : ''].filter(Boolean).join(' · '),
+        item.updatedAt,
+        item.revisionComment || item.remarks
+      )),
+      ...overtimes.map((item) => toRequest(
+        'Overtime',
+        item.overtimeId,
+        'Overtime Request',
+        item.createdAt,
+        item.status,
+        item.approvalStage,
+        [item.purposeOfOvertime, item.inclusiveDateStart && item.inclusiveDateEnd
+          ? `${new Date(item.inclusiveDateStart).toISOString().slice(0, 10)} to ${new Date(item.inclusiveDateEnd).toISOString().slice(0, 10)}`
+          : ''].filter(Boolean).join(' · '),
+        item.updatedAt,
+        item.revisionComment || item.approvalRemarks
+      )),
+      ...coes.map((item) => toRequest(
+        'Certificate of Employment',
+        item.coeId,
+        item.purpose || 'Certificate of Employment',
+        item.createdAt || item.dateOfApplication,
+        item.status,
+        'Admin',
+        item.dateOfApplication ? `Applied ${new Date(item.dateOfApplication).toISOString().slice(0, 10)}` : '',
+        item.updatedAt,
+        item.revisionComment || item.approvalRemarks || item.disapprovalRemarks
+      )),
+      ...noPendencyRequests.map((item) => toRequest(
+        'Certificate of No Pending Case',
+        item.requestId,
+        'Certificate of No Pending Case',
+        item.createdAt || item.dateOfApplication,
+        item.status,
+        'Admin',
+        item.dateOfApplication ? `Applied ${new Date(item.dateOfApplication).toISOString().slice(0, 10)}` : '',
+        item.updatedAt,
+        item.reviewRemarks
+      )),
+      ...noLeaveWithoutPayRequests.map((item) => toRequest(
+        'Certificate of No Leave Without Pay',
+        item.requestId,
+        'Certificate of No Leave Without Pay',
+        item.createdAt || item.dateOfApplication,
+        item.status,
+        'Admin',
+        item.periodFrom && item.periodTo
+          ? `${new Date(item.periodFrom).toISOString().slice(0, 10)} to ${new Date(item.periodTo).toISOString().slice(0, 10)}`
+          : '',
+        item.updatedAt,
+        item.reviewRemarks
+      )),
+      ...profileUpdates.map((item) => toRequest(
+        'Profile Update',
+        item.requestId,
+        'Profile Update Request',
+        item.createdAt,
+        item.status === 'Rejected' ? 'Disapproved' : item.status,
+        item.status === 'Pending' ? 'Admin' : '',
+        item.reviewedBy ? `Reviewed by ${item.reviewedBy}` : '',
+        item.reviewedAt || item.updatedAt,
+        ''
+      )),
+      ...personalDataSheets.map((item) => toRequest(
+        'Personal Data Sheet',
+        item.pdsId,
+        [item.firstName, item.surname].filter(Boolean).join(' ') || 'Personal Data Sheet',
+        item.createdAt,
+        item.status,
+        item.status === 'Pending' ? 'Admin' : '',
+        'PDS submission',
+        item.reviewedAt || item.updatedAt,
+        item.remarks
+      )),
+    ].sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+
+    return res.json({ requests });
+  } catch (error) {
+    console.error('Error fetching personal request tracker:', error);
+    return res.status(500).json({ message: 'Failed to load your request tracker.' });
+  }
+});
+
+app.get('/vault/folders', verifyToken, async (req, res) => {
+  try {
+    const folders = await VaultFolder.find({})
+      .select('name -_id')
+      .sort({ name: 1 })
+      .lean();
+
+    const names = Array.from(new Set([VAULT_DEFAULT_FOLDER, ...folders.map((folder) => folder.name).filter(Boolean)]));
+    return res.json({ folders: names });
+  } catch (error) {
+    console.error('Error fetching vault folders:', error);
+    return res.status(500).json({ message: 'Failed to fetch vault folders' });
+  }
+});
+
+app.post('/vault/folders', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const ownerStaffId = getVaultOwnerStaffId(req.user);
+    const ownerEmail = String(req.user?.email || '').toLowerCase();
+    const folderName = sanitizeFolderName(req.body?.name);
+
+    if (!folderName) {
+      return res.status(400).json({ message: 'Folder name is required' });
+    }
+
+    if (folderName === VAULT_DEFAULT_FOLDER) {
+      return res.status(400).json({ message: 'This folder already exists' });
+    }
+
+    await VaultFolder.findOneAndUpdate(
+      { ownerStaffId, name: folderName },
+      {
+        $setOnInsert: {
+          folderId: `VF-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          ownerStaffId,
+          ownerEmail,
+          name: folderName,
+          createdAt: new Date(),
+        },
+        $set: { updatedAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    ensureVaultFolderPath(ownerStaffId, folderName);
+    return res.status(201).json({ message: 'Folder created', folder: folderName });
+  } catch (error) {
+    console.error('Error creating vault folder:', error);
+    return res.status(500).json({ message: 'Failed to create folder' });
+  }
+});
+
+app.delete('/vault/folders/:folderName', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const folderName = sanitizeFolderName(decodeURIComponent(req.params.folderName || ''));
+
+    if (!folderName || folderName === VAULT_DEFAULT_FOLDER) {
+      return res.status(400).json({ message: 'This folder cannot be deleted' });
+    }
+
+    await VaultFile.updateMany(
+      { folder: folderName },
+      { $set: { folder: VAULT_DEFAULT_FOLDER, updatedAt: new Date() } }
+    );
+
+    await VaultFolder.deleteMany({ name: folderName });
+    return res.json({ message: 'Folder deleted. Files moved to General.' });
+  } catch (error) {
+    console.error('Error deleting vault folder:', error);
+    return res.status(500).json({ message: 'Failed to delete folder' });
+  }
+});
+
+app.get('/vault/files', verifyToken, async (req, res) => {
+  try {
+    const files = await VaultFile.find({})
+      .select('fileId name mimeType size folder createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const normalized = files.map((file) => ({
+      id: file.fileId,
+      name: file.name,
+      mimeType: file.mimeType,
+      size: file.size,
+      folder: file.folder || VAULT_DEFAULT_FOLDER,
+      uploadedAt: file.createdAt,
+    }));
+
+    return res.json({ files: normalized });
+  } catch (error) {
+    console.error('Error fetching vault files:', error);
+    return res.status(500).json({ message: 'Failed to fetch vault files' });
+  }
+});
+
+app.post('/vault/files', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), uploadVaultFiles.array('files', 25), async (req, res) => {
+  try {
+    const ownerStaffId = getVaultOwnerStaffId(req.user);
+    const ownerEmail = String(req.user?.email || '').toLowerCase();
+    const folderName = sanitizeFolderName(req.body?.folder) || VAULT_DEFAULT_FOLDER;
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    if (folderName !== VAULT_DEFAULT_FOLDER) {
+      await VaultFolder.findOneAndUpdate(
+        { ownerStaffId, name: folderName },
+        {
+          $setOnInsert: {
+            folderId: `VF-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            ownerStaffId,
+            ownerEmail,
+            name: folderName,
+            createdAt: new Date(),
+          },
+          $set: { updatedAt: new Date() },
+        },
+        { upsert: true }
+      );
+    }
+
+    const now = new Date();
+    const docs = uploadedFiles.map((file) => ({
+      fileId: `VFILE-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ownerStaffId,
+      ownerEmail,
+      folder: folderName,
+      name: file.originalname,
+      originalName: file.originalname,
+      mimeType: file.mimetype || 'application/octet-stream',
+      size: file.size || 0,
+      storagePath: file.path,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    const created = await VaultFile.insertMany(docs);
+    const responseFiles = created.map((file) => ({
+      id: file.fileId,
+      name: file.name,
+      mimeType: file.mimeType,
+      size: file.size,
+      folder: file.folder,
+      uploadedAt: file.createdAt,
+    }));
+
+    return res.status(201).json({ files: responseFiles });
+  } catch (error) {
+    console.error('Error uploading vault files:', error);
+    return res.status(500).json({ message: 'Failed to upload file(s)' });
+  }
+});
+
+app.patch('/vault/files/:fileId/move', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const ownerStaffId = getVaultOwnerStaffId(req.user);
+    const ownerEmail = String(req.user?.email || '').toLowerCase();
+    const fileId = req.params.fileId;
+    const folderName = sanitizeFolderName(req.body?.folder) || VAULT_DEFAULT_FOLDER;
+
+    if (folderName !== VAULT_DEFAULT_FOLDER) {
+      await VaultFolder.findOneAndUpdate(
+        { ownerStaffId, name: folderName },
+        {
+          $setOnInsert: {
+            folderId: `VF-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            ownerStaffId,
+            ownerEmail,
+            name: folderName,
+            createdAt: new Date(),
+          },
+          $set: { updatedAt: new Date() },
+        },
+        { upsert: true }
+      );
+    }
+
+    const file = await VaultFile.findOneAndUpdate(
+      { fileId },
+      { $set: { folder: folderName, updatedAt: new Date() } },
+      { new: true }
+    ).lean();
+
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    return res.json({ message: 'File moved', file: { id: file.fileId, folder: file.folder } });
+  } catch (error) {
+    console.error('Error moving vault file:', error);
+    return res.status(500).json({ message: 'Failed to move file' });
+  }
+});
+
+app.delete('/vault/files/:fileId', verifyToken, requireRole([ROLES.SUPER_ADMIN, ROLES.ADMIN_HR]), async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+
+    const file = await VaultFile.findOneAndDelete({ fileId }).lean();
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    if (file.storagePath && fs.existsSync(file.storagePath)) {
+      try {
+        fs.unlinkSync(file.storagePath);
+      } catch (deleteErr) {
+        console.warn('Unable to delete vault file from disk:', deleteErr.message);
+      }
+    }
+
+    return res.json({ message: 'File deleted' });
+  } catch (error) {
+    console.error('Error deleting vault file:', error);
+    return res.status(500).json({ message: 'Failed to delete file' });
+  }
+});
+
+app.get('/vault/files/:fileId/content', verifyToken, async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const mode = String(req.query.mode || 'view').toLowerCase();
+
+    const file = await VaultFile.findOne({ fileId }).lean();
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    if (!file.storagePath || !fs.existsSync(file.storagePath)) {
+      return res.status(404).json({ message: 'Stored file is missing on server' });
+    }
+
+    const dispositionType = mode === 'download' ? 'attachment' : 'inline';
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${encodeURIComponent(file.name || 'file')}"`);
+    res.setHeader('Content-Length', String(file.size || 0));
+
+    const stream = fs.createReadStream(file.storagePath);
+    stream.on('error', (error) => {
+      console.error('Error streaming vault file:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Failed to stream file' });
+      }
+    });
+
+    return stream.pipe(res);
+  } catch (error) {
+    console.error('Error retrieving vault file content:', error);
+    return res.status(500).json({ message: 'Failed to retrieve file content' });
   }
 });
 
@@ -4826,5 +9483,19 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
+// Return JSON for oversized payloads (e.g., image-heavy DPCRF submissions)
+app.use((error, req, res, next) => {
+  if (error && (error.type === 'entity.too.large' || error.status === 413)) {
+    return res.status(413).json({
+      message: 'Submitted files are too large. Please upload smaller proof images and try again.',
+    });
+  }
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ message: 'Proof of payment exceeds the 10 MB limit.' });
+  }
+  if (error?.message === 'Proof of payment must be a PDF, JPG, or PNG file.') {
+    return res.status(400).json({ message: error.message });
+  }
 
-
+  return next(error);
+});

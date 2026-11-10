@@ -1,4 +1,28 @@
-export function openPrintWindow(leave = {}) {
+import { isAdmin, normalizeRole } from '../constants';
+
+export async function openPrintWindow(leave = {}) {
+  const currentUser = getCurrentUser();
+  const userRole = normalizeRole(
+    leave.printRequestedByRole ||
+    leave.printRequesterRole ||
+    currentUser?.role ||
+    currentUser?.userRole
+  );
+  const firstAuthorizedOfficerName = 'WARNIE B. EDREA';
+  const firstAuthorizedOfficerRole = 'Authorized Officer / (HRMO-IV)';
+
+  const secondAuthorizedOfficerName = String(
+    leave.secondAuthorizedOfficerName ||
+    firstAuthorizedOfficerName
+  ).trim().toUpperCase();
+  const secondAuthorizedOfficerRoleType = String(
+    leave.secondAuthorizedOfficerRoleType ||
+    (isAdmin(userRole) ? 'admin' : 'other')
+  ).toLowerCase();
+  const secondAuthorizedOfficerRole = secondAuthorizedOfficerRoleType === 'admin'
+    ? 'Authorized Officer / (HRMO-IV)'
+    : 'Authorized Officer';
+
   const applicantName =
     leave.staffName ||
     [leave.firstName, leave.middleName, leave.lastName].filter(Boolean).join(' ') ||
@@ -40,6 +64,7 @@ export function openPrintWindow(leave = {}) {
   const isVacation = typeIncludes('vacation leave', 'vacation', 'vl');
   const isMandatory = typeIncludes('mandatory/force leave', 'mandatory', 'force leave');
   const isSick = typeIncludes('sick leave', 'sick', 'sl');
+  const isWellness = typeIncludes('wellness', 'wellness leave');
   const isMaternity = typeIncludes('maternity leave', 'maternity');
   const isPaternity = typeIncludes('paternity leave', 'paternity');
   const isSpecialPrivilege = typeIncludes('special privilege leave', 'special privilege');
@@ -52,6 +77,7 @@ export function openPrintWindow(leave = {}) {
     isVacation ||
     isMandatory ||
     isSick ||
+    isWellness ||
     isMaternity ||
     isPaternity ||
     isSpecialPrivilege ||
@@ -567,6 +593,7 @@ export function openPrintWindow(leave = {}) {
               <div class="check-row"><span class="check">${box(isVAWC)}</span><span>10-Day VAWC Leave (R.A No. 9262, Omnibus / CSC MC No. 15, s.2010)</span></div>
               <div class="check-row"><span class="check">${box(isRehabilitation)}</span><span>Rehabilitation Privilege (Sec. 55 Rule XVI Omnibus Rules E.O NO. 292)</span></div>
               <div class="check-row"><span class="check">${box(isEmergency)}</span><span>Special Leave Emergency (Calamity) Leave (CSC MC No. 2, s.2012, as amended)</span></div>
+              <div class="check-row"><span class="check">${box(isWellness)}</span><span>Wellness Leave</span></div>
               <div class="check-row">
                 <span class="check">${box(isOtherType)}</span>
                 <span>Others: <span class="text-line line-wide">${escapeHtml(otherLeaveText)}</span></span>
@@ -637,8 +664,8 @@ export function openPrintWindow(leave = {}) {
                 <tr><td>Balance</td><td>${escapeHtml(vacationLeaveBalance)}</td><td>${escapeHtml(sickLeaveBalance)}</td><td>${escapeHtml(ctoBalance)}</td></tr>
               </table>
               <br/>
-              <div class="sign-name">WARNIE B. EDREA</div>
-              <div class="sign-role">Authorized Officer / (HRMO-IV)</div>
+              <div class="sign-name">${escapeHtml(firstAuthorizedOfficerName)}</div>
+              <div class="sign-role">${escapeHtml(firstAuthorizedOfficerRole)}</div>
             </td>
             <td>
               <div><strong>7. B RECOMMENDATION</strong></div>
@@ -668,8 +695,8 @@ export function openPrintWindow(leave = {}) {
                 </div>
               </div>
               <div class="signature-row">
-                <div class="sign-name" style="margin-top: 12px;">WARNIE B. EDREA</div>
-                <div class="sign-role">Authorized Officer / (HRMO-IV)</div>
+                <div class="sign-name" style="margin-top: 12px;">${escapeHtml(secondAuthorizedOfficerName)}</div>
+                <div class="sign-role">${escapeHtml(secondAuthorizedOfficerRole)}</div>
               </div>
             </td>
           </tr>
@@ -682,13 +709,23 @@ export function openPrintWindow(leave = {}) {
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
     alert('Unable to open print window. Please allow popups for this site.');
-    return;
+    return false;
   }
   w.document.open();
   w.document.write(html);
   w.document.close();
   w.focus();
   setTimeout(() => { w.print(); }, 500);
+  return true;
+}
+
+function getCurrentUser() {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatDate(value) {

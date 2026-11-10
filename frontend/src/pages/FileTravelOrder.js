@@ -30,6 +30,10 @@ function FileTravelOrder({ staffId }) {
     periodCoveredTo: '',
     officialBusiness: false,
     officialTime: false,
+    meeting: false,
+    travel: false,
+    training: false,
+    seminar: false,
     venueDestination: '',
     expensesCovered: '',
     fundSourcePapCode: '',
@@ -82,7 +86,7 @@ function FileTravelOrder({ staffId }) {
         staffName: response.data.name,
       }));
     } catch (err) {
-      setError('Staff ID not found');
+      setError('Item Number not found');
     }
   };
 
@@ -131,6 +135,10 @@ function FileTravelOrder({ staffId }) {
         periodCoveredTo: toDateInputValue(order.periodCoveredTo || order.dateTo || order.dateFrom),
         officialBusiness: Boolean(order.officialBusiness),
         officialTime: Boolean(order.officialTime),
+        meeting: Boolean(order.meeting),
+        travel: Boolean(order.travel),
+        training: Boolean(order.training),
+        seminar: Boolean(order.seminar),
         venueDestination: order.venueDestination || order.destination || '',
         expensesCovered: order.expensesCovered || '',
         fundSourcePapCode: order.fundSourcePapCode || '',
@@ -228,7 +236,7 @@ function FileTravelOrder({ staffId }) {
     setSuccess('');
 
     if (!staffId) {
-      setError('Please enter your Staff ID in the navigation bar');
+      setError('Please enter your Item Number in the navigation bar');
       return;
     }
 
@@ -286,6 +294,10 @@ function FileTravelOrder({ staffId }) {
         periodCoveredTo: '',
         officialBusiness: false,
         officialTime: false,
+        meeting: false,
+        travel: false,
+        training: false,
+        seminar: false,
         venueDestination: '',
         expensesCovered: '',
         fundSourcePapCode: '',
@@ -312,18 +324,18 @@ function FileTravelOrder({ staffId }) {
 
   return (
     <div className="mt-6 max-w-6xl">
-      <h1 className="text-3xl font-bold mb-6">Request Travel Order</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-6">Request Travel Order</h1>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
-      {success && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{success}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
+      {success && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">{success}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm space-y-4">
         <div className="max-w-xs">
           <label className="block font-bold mb-2">Travel Type *</label>
           <select
             value={travelType}
             onChange={(e) => setTravelType(e.target.value)}
-            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
             required
           >
             <option value="">-- Select Travel Type --</option>
@@ -334,7 +346,7 @@ function FileTravelOrder({ staffId }) {
 
         {/* Office Travel Order Fields */}
         {travelType === 'office' && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
             <div>
               <label className="block font-bold mb-2">Date of Filing *</label>
               <input
@@ -342,7 +354,7 @@ function FileTravelOrder({ staffId }) {
                 name="dateOfFiling"
                 value={formData.dateOfFiling}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -352,7 +364,7 @@ function FileTravelOrder({ staffId }) {
               <select
                 value={isCustomDesignations ? 'other' : numDesignations}
                 onChange={handleNumDesignationsChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               >
                 {[1, 2, 3, 4, 5].map(num => (
                   <option key={num} value={num}>{num}</option>
@@ -370,7 +382,7 @@ function FileTravelOrder({ staffId }) {
                   onChange={handleCustomNumDesignationsChange}
                   placeholder="Enter any number"
                   min="1"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 />
               </div>
             )}
@@ -383,7 +395,7 @@ function FileTravelOrder({ staffId }) {
                   value={designation}
                   onChange={(e) => handleDesignationChange(index, e.target.value)}
                   placeholder="e.g., Juan Dela Cruz / Senior Officer"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                   required
                 />
               </div>
@@ -397,7 +409,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.permanentStation}
                 onChange={handleChange}
                 placeholder="e.g., Metro Manila Office"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -410,7 +422,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.purposeOfTravel}
                 onChange={handleChange}
                 placeholder="e.g., Attend Training, Conference"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -423,7 +435,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.activitySponsoredBy}
                 onChange={handleChange}
                 placeholder="e.g., Department, Bureau"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -436,7 +448,7 @@ function FileTravelOrder({ staffId }) {
                   name="periodCoveredFrom"
                   value={formData.periodCoveredFrom}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                   required
                 />
               </div>
@@ -447,7 +459,7 @@ function FileTravelOrder({ staffId }) {
                   name="periodCoveredTo"
                   value={formData.periodCoveredTo}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                   required
                 />
               </div>
@@ -455,27 +467,26 @@ function FileTravelOrder({ staffId }) {
 
             <div className="col-span-2">
               <label className="block font-bold mb-2">Please Check *</label>
-              <div className="flex gap-6">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="officialBusiness"
-                    checked={formData.officialBusiness}
-                    onChange={(e) => setFormData({...formData, officialBusiness: e.target.checked})}
-                    className="w-4 h-4"
-                  />
-                  <span>Official Business</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="officialTime"
-                    checked={formData.officialTime}
-                    onChange={(e) => setFormData({...formData, officialTime: e.target.checked})}
-                    className="w-4 h-4"
-                  />
-                  <span>Official Time</span>
-                </label>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {[
+                  ['officialBusiness', 'Official Business'],
+                  ['officialTime', 'Official Time'],
+                  ['meeting', 'Meeting'],
+                  ['travel', 'Travel'],
+                  ['training', 'Training'],
+                  ['seminar', 'Seminar'],
+                ].map(([name, label]) => (
+                  <label key={name} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name={name}
+                      checked={formData[name]}
+                      onChange={(e) => setFormData({ ...formData, [name]: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -487,7 +498,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.venueDestination}
                 onChange={handleChange}
                 placeholder="e.g., Convention Center, Hotel Name"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -500,7 +511,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.expensesCovered}
                 onChange={handleChange}
                 placeholder="e.g., Transportation, Accommodation"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -513,7 +524,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.fundSourcePapCode}
                 onChange={handleChange}
                 placeholder="e.g., PAP-2026-001"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               />
             </div>
           </div>
@@ -521,7 +532,7 @@ function FileTravelOrder({ staffId }) {
 
         {/* Travel Abroad Fields */}
         {travelType === 'abroad' && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
             <div>
               <label className="block font-bold mb-2">Date Prepared *</label>
               <input
@@ -529,7 +540,7 @@ function FileTravelOrder({ staffId }) {
                 name="datePrepared"
                 value={formData.datePrepared}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -542,7 +553,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.region}
                 onChange={handleChange}
                 placeholder="e.g., Region I, Region VI"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -555,7 +566,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.province}
                 onChange={handleChange}
                 placeholder="e.g., Metro Manila, Cavite"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -568,7 +579,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.municipality}
                 onChange={handleChange}
                 placeholder="e.g., Makati, Pasig"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -580,7 +591,7 @@ function FileTravelOrder({ staffId }) {
                 name="abroadDateOfFiling"
                 value={formData.abroadDateOfFiling}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -593,7 +604,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.abroadName}
                 onChange={handleChange}
                 placeholder="Full name"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -606,7 +617,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.office}
                 onChange={handleChange}
                 placeholder="e.g., Bureau of Internal Revenue"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -619,7 +630,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.position}
                 onChange={handleChange}
                 placeholder="e.g., Senior Tax Officer"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -632,7 +643,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.period}
                 onChange={handleChange}
                 placeholder="e.g., February 1-15, 2026"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -645,7 +656,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.travelDestination}
                 onChange={handleChange}
                 placeholder="Country and city of travel"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -658,7 +669,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.fundSource}
                 onChange={handleChange}
                 placeholder="e.g., Agency Budget, Grant"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 required
               />
             </div>
@@ -671,7 +682,7 @@ function FileTravelOrder({ staffId }) {
                 value={formData.attachment}
                 onChange={handleChange}
                 placeholder="e.g., Document name or reference"
-                className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               />
             </div>
           </div>
@@ -680,7 +691,7 @@ function FileTravelOrder({ staffId }) {
         <button
           type="submit"
           disabled={loading || !staffName || !travelType}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+          className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400 text-sm font-semibold"
         >
           {loading ? (editingTravelOrderId ? 'Updating...' : 'Filing...') : (editingTravelOrderId ? 'Update & Resubmit Travel Order' : 'File Travel Order')}
         </button>

@@ -233,7 +233,7 @@ function StaffLeaveRecordDetail() {
           staffData = staffRes.data;
           console.log('[fetchData] Staff data received:', JSON.stringify(staffData));
           
-          // The URL param IS the staff ID (it's passed as staff.id from EmployeeLeaveRecord)
+          // The URL param IS the Item Number (it's passed as staff.id from EmployeeLeaveRecord)
           // So we can use it directly
           actualStaffId = staffId;
           console.log('[fetchData] Using URL param as actualStaffId:', actualStaffId);
@@ -504,7 +504,7 @@ function StaffLeaveRecordDetail() {
       console.log('[handleSaveNewRecord] Using actualStaffId:', actualStaffId);
       console.log('[handleSaveNewRecord] Staff data:', staff);
       if (!actualStaffId) {
-        alert('Staff ID not found. Please reload the page.');
+        alert('Item Number not found. Please reload the page.');
         return;
       }
       await leaveRecordAPI.create({

@@ -181,11 +181,11 @@ function SystemLogs() {
   }, []);
 
   return (
-    <div className="min-h-full bg-slate-100 rounded-2xl p-6 md:p-8">
+    <div className="min-h-full bg-slate-100 rounded-xl p-6 md:p-8 border border-blue-100/60">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-blue-800 tracking-tight">System Logs &amp; Audit Trail</h1>
-          <p className="inline-flex items-center mt-3 px-3 py-1 rounded-md bg-blue-600 text-white text-sm font-semibold">
+          <h1 className="text-4xl font-extrabold text-blue-800 tracking-tight">System Logs &amp; Audit Trail</h1>
+          <p className="inline-flex items-center mt-3 px-3 py-1 rounded-md bg-blue-600 text-white text-xs font-semibold">
             Real-time Activity Monitoring
           </p>
         </div>
@@ -193,14 +193,14 @@ function SystemLogs() {
         <button
           type="button"
           onClick={fetchLogs}
-          className="self-start inline-flex items-center gap-2 text-blue-700 hover:text-blue-800 font-semibold"
+          className="self-start inline-flex items-center gap-2 text-blue-700 hover:text-blue-800 font-semibold text-sm"
         >
           <FiRefreshCw size={16} />
           Refresh
         </button>
       </div>
 
-      <div className="bg-slate-50 border border-blue-100 rounded-xl p-4 md:p-5 shadow-sm mb-5">
+      <div className="bg-white border border-blue-100 rounded-xl p-4 md:p-5 shadow-sm mb-5">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
           <div className="md:col-span-3">
             <label className="block text-blue-700 font-bold mb-2">Search Logs</label>
@@ -211,7 +211,7 @@ function SystemLogs() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search logs, users, IP..."
-                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full pl-10 pr-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -221,7 +221,7 @@ function SystemLogs() {
             <select
               value={moduleFilter}
               onChange={(event) => setModuleFilter(event.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
             >
               {MODULE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -236,7 +236,7 @@ function SystemLogs() {
             <select
               value={actionFilter}
               onChange={(event) => setActionFilter(event.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
             >
               {ACTION_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -251,7 +251,7 @@ function SystemLogs() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -266,7 +266,7 @@ function SystemLogs() {
             <select
               value={dateRange}
               onChange={(event) => setDateRange(event.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
             >
               {DATE_RANGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -280,7 +280,7 @@ function SystemLogs() {
             <button
               type="button"
               onClick={clearFilters}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-indigo-500 text-white hover:bg-indigo-600 transition"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-indigo-500 text-white hover:bg-indigo-600 transition text-sm font-semibold"
             >
               <FiFilter size={16} />
               Clear
@@ -293,51 +293,51 @@ function SystemLogs() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px]">
             <thead>
-              <tr className="bg-blue-600 text-white">
-                <th className="text-left px-5 py-4 font-semibold">Timestamp</th>
-                <th className="text-left px-5 py-4 font-semibold">Module</th>
-                <th className="text-left px-5 py-4 font-semibold">Action</th>
-                <th className="text-left px-5 py-4 font-semibold">User</th>
-                <th className="text-left px-5 py-4 font-semibold">Description</th>
-                <th className="text-left px-5 py-4 font-semibold">IP Address</th>
-                <th className="text-left px-5 py-4 font-semibold">Status</th>
-                <th className="text-left px-5 py-4 font-semibold">Actions</th>
+              <tr className="bg-blue-500 text-white">
+                <th className="text-left px-4 py-3 text-sm font-semibold">Timestamp</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">Module</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">Action</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">User</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">Description</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">IP Address</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">Status</th>
+                <th className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     Loading system logs...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-red-600">
+                  <td colSpan={8} className="px-4 py-12 text-center text-red-600">
                     {error}
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     No system logs found.
                   </td>
                 </tr>
               ) : (
                 logs.map((log, index) => (
                   <tr key={log.id || `${log.timestamp}-${index}`} className="border-t border-gray-100 hover:bg-slate-50">
-                    <td className="px-5 py-3 text-sm text-gray-700 whitespace-nowrap">{formatTimestamp(log.timestamp)}</td>
-                    <td className="px-5 py-3 text-sm font-medium text-gray-900">{log.module || '-'}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{log.action || '-'}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700">{log.user || '-'}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700 max-w-[460px]">{log.description || '-'}</td>
-                    <td className="px-5 py-3 text-sm text-gray-700 whitespace-nowrap">{log.ipAddress || '-'}</td>
-                    <td className="px-5 py-3 text-sm">
+                    <td className="px-4 py-2.5 text-sm text-gray-700 whitespace-nowrap">{formatTimestamp(log.timestamp)}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-900">{log.module || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-700">{log.action || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-700">{log.user || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-700 max-w-[460px]">{log.description || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-700 whitespace-nowrap">{log.ipAddress || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_CLASSES[log.status] || 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
                         {log.status || 'Info'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-sm">
+                    <td className="px-4 py-2.5 text-sm">
                       <button
                         type="button"
                         onClick={() => {
@@ -356,7 +356,7 @@ function SystemLogs() {
           </table>
         </div>
 
-        <div className="border-t border-gray-100 px-4 py-3 md:px-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="border-t border-blue-100 px-4 py-3 md:px-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-blue-50/40">
           <p className="text-sm text-gray-600">
             Showing page {pagination.page || page} of {pagination.totalPages || 1} • {pagination.total || 0} total logs
           </p>
@@ -366,7 +366,7 @@ function SystemLogs() {
               type="button"
               onClick={() => canGoPrevious && setPage((prev) => prev - 1)}
               disabled={!canGoPrevious || loading}
-              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 rounded-md border border-blue-200 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
@@ -374,7 +374,7 @@ function SystemLogs() {
               type="button"
               onClick={() => canGoNext && setPage((prev) => prev + 1)}
               disabled={!canGoNext || loading}
-              className="px-3 py-1.5 rounded-md border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 rounded-md border border-blue-200 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>
@@ -394,13 +394,13 @@ function SystemLogs() {
                     goToPage();
                   }
                 }}
-                className="w-20 px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-20 px-2 py-1.5 border border-blue-200 rounded-md text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={goToPage}
                 disabled={loading || !hasPages}
-                className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-md bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Go
               </button>
@@ -411,18 +411,18 @@ function SystemLogs() {
 
       {selectedLog && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px] flex items-center justify-center p-4"
           onClick={() => {
             setSelectedLog(null);
             setCopyState('idle');
           }}
         >
           <div
-            className="bg-white w-full max-w-3xl rounded-xl shadow-xl overflow-hidden"
+            className="bg-white w-full max-w-3xl rounded-xl border border-blue-100 shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-gray-800">Log Details</h3>
+            <div className="px-6 py-4 border-b border-blue-100 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-blue-950">Log Details</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -497,7 +497,7 @@ function SystemLogs() {
                   setSelectedLog(null);
                   setCopyState('idle');
                 }}
-                className="px-4 py-2 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                className="px-4 py-2 rounded-md bg-blue-500 text-white font-semibold hover:bg-blue-600"
               >
                 Close
               </button>

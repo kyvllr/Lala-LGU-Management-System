@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash, TbPrinter } from 'react-icons/tb';
 import { staffAPI, serviceRecordAPI } from '../api';
-import { isAdmin, normalizeRole } from '../constants';
+import { isDepartmentStaffManager, normalizeRole } from '../constants';
 import { exportToCsv } from '../exportCsv';
 // CSV import utility
+const SERVICE_RECORD_REMARK_OPTIONS = ['Step Increment', 'Increase', 'Promotion', 'Demotion'];
+
 function importFromCsv(file, callback) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -101,7 +103,7 @@ function ServiceRecord() {
       setLoading(true);
       const storedUser = JSON.parse(localStorage.getItem('user'));
 
-      if (isAdmin(storedUser.role)) {
+      if (isDepartmentStaffManager(storedUser.role)) {
         // Admin sees staff list
         const staffRes = await staffAPI.getAll();
         setStaffs(staffRes.data.filter(s => s.isApproved));
@@ -308,15 +310,23 @@ function ServiceRecord() {
       const htmlContent = generatePrintHTML(surname, givenName, middleName, birthDate, placeOfBirth, tinNumber, staffRecords, staffRecords.length, true);
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-      setTimeout(() => {
+      Promise.all(Array.from(printWindow.document.images, (image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+        });
+      })).then(() => setTimeout(() => {
         printWindow.print();
-      }, 250);
+      }, 100));
     } catch (err) {
       console.error('Error fetching staff records:', err);
     }
   };
 
   const generatePrintHTML = (surname, givenName, middleName, birthDate, placeOfBirth, tinNumber, serviceRecordsData, recordsToShowCount, includeSignature) => {
+    const logoUrl = `${window.location.origin}/logo.PNG`;
+    const bagongPilipinasUrl = `${window.location.origin}/Bagong%20Pilipinas.png`;
     let htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -328,6 +338,20 @@ function ServiceRecord() {
             margin: 20px;
             color: #000;
             line-height: 1;
+          }
+          .print-brand-header {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+          }
+          .print-brand-logo {
+            width: 76px;
+            height: 76px;
+            object-fit: contain;
+            justify-self: center;
+            transform: translateY(-12px);
           }
           .title {
             text-align: center;
@@ -446,8 +470,12 @@ function ServiceRecord() {
         </style>
       </head>
       <body>
-        <div class="title">
-          <h1>SERVICE RECORD</h1>
+        <div class="print-brand-header">
+          <img class="print-brand-logo" src="${logoUrl}" alt="Municipality of Lala seal">
+          <div class="title">
+            <h1>SERVICE RECORD</h1>
+          </div>
+          <img class="print-brand-logo" src="${bagongPilipinasUrl}" alt="Bagong Pilipinas">
         </div>
         <div class="subtitle">
           (To be Accomplished by Employer)
@@ -553,7 +581,7 @@ function ServiceRecord() {
     
     const printWindow = window.open('', '_blank');
     const ownStaffId = user?.staffId || user?.id;
-    const isSelfView = !isAdmin(user?.role);
+    const isSelfView = !isDepartmentStaffManager(user?.role);
     const staffId = isSelfView ? ownStaffId : viewingStaffId;
     const staffName = isSelfView ? user?.name : viewingStaffName;
     
@@ -597,9 +625,15 @@ function ServiceRecord() {
       const htmlContent = generatePrintHTML(surname, givenName, middleName, birthDate, placeOfBirth, tinNumber, staffRecords, recordsToShow, withSignature);
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-      setTimeout(() => {
+      Promise.all(Array.from(printWindow.document.images, (image) => {
+        if (image.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+        });
+      })).then(() => setTimeout(() => {
         printWindow.print();
-      }, 250);
+      }, 100));
     } catch (err) {
       console.error('Error fetching staff records:', err);
     }
@@ -646,7 +680,7 @@ function ServiceRecord() {
       let staffId = viewingStaffId || user?.staffId || '';
       let staffName = viewingStaffName || user?.name || '';
       // If admin is viewing all, require staff selection
-      if (isAdmin(user?.role) && !viewingStaffId) {
+      if (isDepartmentStaffManager(user?.role) && !viewingStaffId) {
         setError('Please select a staff to import records for.');
         setImporting(false);
         return;
@@ -671,48 +705,48 @@ function ServiceRecord() {
     });
   };
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
-  if (importing) return <div className="text-center p-8 text-blue-600 font-bold">Importing records...</div>;
-  if (importSuccess) return <div className="text-center p-8 text-green-600 font-bold">Import successful!</div>;
+  if (importing) return <div className="text-center p-8 text-blue-600 font-semibold">Importing records...</div>;
+  if (importSuccess) return <div className="text-center p-8 text-green-600 font-semibold">Import successful!</div>;
 
   return (
-    <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-6">Service Records</h1>
+    <div className="mt-6 space-y-5">
+      <h1 className="text-4xl font-bold tracking-tight text-blue-950 mb-6">Service Records</h1>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
           {error}
         </div>
       )}
 
       {/* Admin view: Staff list */}
-      {isAdmin(user?.role) && !viewingStaffId && (
+      {isDepartmentStaffManager(user?.role) && !viewingStaffId && (
         <div>
-          <div className="mb-6 bg-white p-4 rounded shadow">
+          <div className="mb-6 bg-blue-50/70 border border-blue-100 p-4 rounded-lg shadow-sm">
             <div className="flex flex-col md:flex-row gap-4 items-end">
               <div className="flex-1">
-                <label className="text-sm font-semibold text-gray-700 mb-2 block">Search Staff</label>
+                <label className="text-xs font-semibold uppercase tracking-wide text-blue-800 mb-2 block">Search Staff</label>
                 <input
                   type="text"
                   placeholder="Search by name, ID, or email..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-200">
+          <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-hidden">
+            <table className="w-full text-[13px] text-slate-700">
+              <thead className="bg-blue-100/80 border-b border-blue-200 text-blue-900">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Staff ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Email</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold">Position</th>
-                  <th className="px-6 py-3 text-center text-sm font-semibold">Action</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Item Number</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Email</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
+                  <th className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -723,26 +757,26 @@ function ServiceRecord() {
                     staff.email.toLowerCase().includes(searchQuery.toLowerCase())
                   )
                   .map(staff => (
-                    <tr key={staff.id} className="border-t hover:bg-gray-50">
-                      <td className="px-6 py-3">{staff.name}</td>
-                      <td className="px-6 py-3">{staff.id}</td>
-                      <td className="px-6 py-3">{staff.email}</td>
-                      <td className="px-6 py-3">{staff.position}</td>
-                      <td className="px-6 py-3 text-center">
+                    <tr key={staff.id} className="border-t border-blue-50 hover:bg-blue-50/40">
+                      <td className="px-4 py-2.5 font-medium text-slate-900">{staff.name}</td>
+                      <td className="px-4 py-2.5">{staff.id}</td>
+                      <td className="px-4 py-2.5">{staff.email}</td>
+                      <td className="px-4 py-2.5">{staff.position}</td>
+                      <td className="px-4 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleViewStaff(staff.id, staff.name)}
-                            className="p-2 text-blue-500 hover:bg-blue-100 rounded transition"
+                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded transition"
                             title="View records"
                           >
-                            <TbEye size={20} />
+                            <TbEye size={18} />
                           </button>
                           <button
                             onClick={() => handlePrintStaffRecord(staff.id, staff.name)}
-                            className="p-2 text-green-500 hover:bg-green-100 rounded transition"
+                            className="p-1.5 text-green-500 hover:bg-green-100 rounded transition"
                             title="Print service record"
                           >
-                            <TbPrinter size={20} />
+                            <TbPrinter size={18} />
                           </button>
                         </div>
                       </td>
@@ -755,38 +789,38 @@ function ServiceRecord() {
       )}
 
       {/* Detail view: Service records for selected staff (Admin) or own records (non-admin) */}
-      {(viewingStaffId || (user && !isAdmin(user?.role))) && (
+      {(viewingStaffId || (user && !isDepartmentStaffManager(user?.role))) && (
         <div>
           <div className="flex items-center gap-4 mb-6">
-            {isAdmin(user?.role) && viewingStaffId && (
+            {isDepartmentStaffManager(user?.role) && viewingStaffId && (
               <button
                 onClick={handleBackToList}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+                className="px-4 py-2 bg-slate-100 border border-slate-200 text-slate-700 rounded-md hover:bg-slate-200 transition text-sm font-semibold"
               >
                 ← Back to Staff List
               </button>
             )}
-            <h2 className="text-2xl font-bold">
-              {!isAdmin(user?.role) ? 'My Service Records' : `${viewingStaffName}'s Service Records`}
+            <h2 className="text-2xl font-bold tracking-tight text-blue-950">
+              {!isDepartmentStaffManager(user?.role) ? 'My Service Records' : `${viewingStaffName}'s Service Records`}
             </h2>
-            {isAdmin(user?.role) && (
+            {isDepartmentStaffManager(user?.role) && (
               <>
                 <button
                   onClick={handlePrint}
-                  className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                  className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition text-sm font-semibold"
                   title="Print service record"
                 >
-                  <TbPrinter size={20} />
+                  <TbPrinter size={18} />
                   Print
                 </button>
                 <button
                   onClick={handleExportCsv}
-                  className="ml-2 flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
+                  className="ml-2 flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition text-sm font-semibold"
                   title="Export CSV"
                 >
                   Export CSV
                 </button>
-                <label className="ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition cursor-pointer">
+                <label className="ml-2 px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition cursor-pointer text-sm font-semibold">
                   Import CSV
                   <input type="file" accept=".csv" onChange={handleImportCsv} style={{ display: 'none' }} />
                 </label>
@@ -794,56 +828,56 @@ function ServiceRecord() {
             )}
           </div>
 
-          <div className="mb-6 bg-white p-4 rounded shadow">
+          <div className="mb-6 bg-blue-50/70 border border-blue-100 p-4 rounded-lg shadow-sm">
             <div className="flex flex-col md:flex-row gap-4 items-center">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-semibold text-gray-700">Show:</label>
+                <label className="text-sm font-semibold text-blue-800">Show:</label>
                 <input 
                   type="number" 
                   value={recordsToShow} 
                   onChange={(e) => setRecordsToShow(Math.max(1, parseInt(e.target.value) || 1))}
                   min="1"
                   max={serviceRecords.length}
-                  className="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 w-16 text-center"
+                  className="px-3 py-1.5 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 w-16 text-center text-sm bg-white"
                 />
-                <label className="text-sm font-semibold text-gray-700">records (Total: {serviceRecords.length})</label>
+                <label className="text-sm font-semibold text-blue-800">records (Total: {serviceRecords.length})</label>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded shadow overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-200">
-                <tr className="border-b-2 border-gray-400">
-                  <th colSpan="2" className="px-4 py-3 text-center font-semibold border-r border-gray-400">SERVICE<br/>(Inclusive Date)</th>
-                  <th colSpan="3" className="px-4 py-3 text-center font-semibold border-r border-gray-400">RECORD OF APPOINTMENT</th>
-                  <th colSpan="2" className="px-4 py-3 text-center font-semibold border-r border-gray-400">OFFICIAL / DIVISION</th>
-                  <th colSpan="2" className="px-4 py-3 text-center font-semibold border-r border-gray-400">LEAVE WITHOUT PAY</th>
-                  <th className="px-4 py-3 text-center font-semibold border-r border-gray-400">Remarks</th>
-                  {isAdmin(user?.role) && (
-                    <th className="px-4 py-3 text-center font-semibold">Action</th>
+          <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-x-auto">
+            <table className="w-full text-[13px] text-slate-700">
+              <thead className="bg-blue-100/80 text-blue-900">
+                <tr className="border-b border-blue-300">
+                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">SERVICE<br/>(Inclusive Date)</th>
+                  <th colSpan="3" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">RECORD OF APPOINTMENT</th>
+                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">OFFICIAL / DIVISION</th>
+                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">LEAVE WITHOUT PAY</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">Remarks</th>
+                  {isDepartmentStaffManager(user?.role) && (
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold">Action</th>
                   )}
                 </tr>
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">From</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">To</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">Designation</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">Status</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">Salary</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r ">Station / Place of Assignment | Branch</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400"></th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">From</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400">To</th>
-                  <th className="px-4 py-3 text-left font-semibold border-r border-gray-400"></th>
-                  {isAdmin(user?.role) && (
-                    <th className="px-4 py-3 text-center font-semibold"></th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Designation</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Salary</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r">Station / Place of Assignment | Branch</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
+                  {isDepartmentStaffManager(user?.role) && (
+                    <th className="px-3 py-2 text-center text-xs font-semibold"></th>
                   )}
                 </tr>
               </thead>
               <tbody>
                 {serviceRecords.length === 0 && !showAddForm ? (
                   <tr>
-                    <td colSpan={isAdmin(user?.role) ? 11 : 10} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={isDepartmentStaffManager(user?.role) ? 11 : 10} className="px-4 py-8 text-center text-blue-700 bg-blue-50/40">
                       No service records found
                     </td>
                   </tr>
@@ -944,14 +978,20 @@ function ServiceRecord() {
                             />
                           </td>
                           <td className="px-4 py-3">
-                            <textarea
+                            <select
                               name="remarks"
                               value={formData.remarks}
                               onChange={handleFormChange}
-                              placeholder="Remarks"
-                              rows="1"
                               className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500 text-xs"
-                            ></textarea>
+                            >
+                              <option value="">Select remark</option>
+                              {formData.remarks && !SERVICE_RECORD_REMARK_OPTIONS.includes(formData.remarks) && (
+                                <option value={formData.remarks}>{formData.remarks}</option>
+                              )}
+                              {SERVICE_RECORD_REMARK_OPTIONS.map((remark) => (
+                                <option key={remark} value={remark}>{remark}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-4 py-3 text-center space-x-2">
                             <button
@@ -970,36 +1010,36 @@ function ServiceRecord() {
                         </tr>
                       ) : (
                         // Display Row
-                        <tr key={record.recordId} className="border-t hover:bg-gray-50">
-                          <td className="px-4 py-3">
+                        <tr key={record.recordId} className="border-t border-blue-50 hover:bg-blue-50/40">
+                          <td className="px-3 py-2">
                             {record.serviceFrom ? new Date(record.serviceFrom).toLocaleDateString() : '-'}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             {record.serviceTo ? new Date(record.serviceTo).toLocaleDateString() : '-'}
                           </td>
-                          <td className="px-4 py-3">{record.designation || '-'}</td>
-                          <td className="px-4 py-3">{record.status || '-'}</td>
-                          <td className="px-4 py-3">{record.salary || '-'}</td>
-                          <td className="px-4 py-3">{record.station || '-'}</td>
-                          <td className="px-4 py-3"></td>
-                          <td className="px-4 py-3">{record.leaveWithoutPayFrom || '-'}</td>
-                          <td className="px-4 py-3">{record.leaveWithoutPayTo || '-'}</td>
-                          <td className="px-4 py-3 max-w-xs">{record.remarks || '-'}</td>
-                          {isAdmin(user?.role) && (
-                            <td className="px-4 py-3 text-center">
+                          <td className="px-3 py-2">{record.designation || '-'}</td>
+                          <td className="px-3 py-2">{record.status || '-'}</td>
+                          <td className="px-3 py-2">{record.salary || '-'}</td>
+                          <td className="px-3 py-2">{record.station || '-'}</td>
+                          <td className="px-3 py-2"></td>
+                          <td className="px-3 py-2">{record.leaveWithoutPayFrom || '-'}</td>
+                          <td className="px-3 py-2">{record.leaveWithoutPayTo || '-'}</td>
+                          <td className="px-3 py-2 max-w-xs">{record.remarks || '-'}</td>
+                          {isDepartmentStaffManager(user?.role) && (
+                            <td className="px-3 py-2 text-center">
                               <button
                                 onClick={() => handleEditRecord(record)}
-                                className="p-2 text-yellow-500 hover:bg-yellow-100 rounded transition"
+                                className="p-1.5 text-amber-500 hover:bg-amber-100 rounded transition"
                                 title="Edit record"
                               >
-                                <TbEdit size={20} />
+                                <TbEdit size={18} />
                               </button>
                               <button
                                 onClick={() => handleDeleteRecord(record.recordId)}
-                                className="p-2 text-red-500 hover:bg-red-100 rounded transition"
+                                className="p-1.5 text-red-500 hover:bg-red-100 rounded transition"
                                 title="Delete record"
                               >
-                                <TbTrash size={20} />
+                                <TbTrash size={18} />
                               </button>
                             </td>
                           )}
@@ -1007,7 +1047,7 @@ function ServiceRecord() {
                       )
                     ))}
                     
-                    {showAddForm && isAdmin(user?.role) && (
+                    {showAddForm && isDepartmentStaffManager(user?.role) && (
                       <tr className="border-t bg-blue-50">
                         <td className="px-4 py-3">
                           <input
@@ -1100,14 +1140,20 @@ function ServiceRecord() {
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <textarea
+                          <select
                             name="remarks"
                             value={formData.remarks}
                             onChange={handleFormChange}
-                            placeholder="Remarks"
-                            rows="1"
                             className="w-full px-2 py-1 border rounded focus:outline-none focus:border-blue-500 text-xs"
-                          ></textarea>
+                          >
+                            <option value="">Select remark</option>
+                            {formData.remarks && !SERVICE_RECORD_REMARK_OPTIONS.includes(formData.remarks) && (
+                              <option value={formData.remarks}>{formData.remarks}</option>
+                            )}
+                            {SERVICE_RECORD_REMARK_OPTIONS.map((remark) => (
+                              <option key={remark} value={remark}>{remark}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-3 text-center space-x-2">
                           <button
@@ -1131,10 +1177,10 @@ function ServiceRecord() {
             </table>
           </div>
 
-          {isAdmin(user?.role) && !showAddForm && (
+          {isDepartmentStaffManager(user?.role) && !showAddForm && (
             <button
               onClick={handleAddRecord}
-              className="mt-6 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition"
+              className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition text-sm font-semibold shadow-sm"
             >
               + Add Record
             </button>

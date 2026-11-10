@@ -207,18 +207,18 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
     }
   };
 
-  if (loading) return <div className="text-center p-8">Loading overtime requests...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading overtime requests...</div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Approve Overtime Requests (Budget Officer)</h1>
-      <p className="text-gray-600 mb-6 text-sm">Review overtime requests approved by the Head of Requisitioning Office. Your approval will forward them to Admin for final review.</p>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-6">Approve Overtime Requests (Budget Officer)</h1>
+      <p className="text-blue-700/80 mb-6 text-sm">Review overtime requests approved by the Head of Requisitioning Office. Your approval will forward them to Admin for final review.</p>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg border border-red-300">{error}</div>}
-      {success && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg border border-green-300">{success}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">{error}</div>}
+      {success && <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">{success}</div>}
 
       {/* Filter Section */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Search</label>
@@ -229,7 +229,7 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
                 placeholder="Search by staff name or purpose..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
               />
             </div>
           </div>
@@ -237,56 +237,56 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
       </div>
 
       {/* Overtimes Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-hidden">
         {filteredOvertimes.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
             {overtimes.length === 0 ? 'No overtime requests pending your approval' : 'No results matching your search'}
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse text-[13px] text-slate-700">
               <thead>
-                <tr className="bg-gray-200">
-                  <th className="border px-4 py-3 text-left font-bold">Staff Name</th>
-                  <th className="border px-4 py-3 text-left font-bold">Position</th>
-                  <th className="border px-4 py-3 text-left font-bold">Purpose</th>
-                  <th className="border px-4 py-3 text-left font-bold">From Date</th>
-                  <th className="border px-4 py-3 text-left font-bold">To Date</th>
-                  <th className="border px-4 py-3 text-left font-bold">Head Office Approval</th>
-                  <th className="border px-4 py-3 text-center font-bold">Action</th>
+                <tr className="bg-blue-100/80 text-blue-900">
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Staff Name</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Position</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Purpose</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">From Date</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">To Date</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Head Office Approval</th>
+                  <th className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredOvertimes.map((overtime) => (
-                  <tr key={overtime.overtimeId} className="border hover:bg-gray-50">
-                    <td className="border px-4 py-3">
+                  <tr key={overtime.overtimeId} className="border border-blue-100 hover:bg-blue-50/50">
+                    <td className="border border-blue-100 px-3 py-1.5">
                       {`${overtime.firstName || ''} ${overtime.lastName || ''}`.trim()}
                     </td>
-                    <td className="border px-4 py-3">{overtime.position}</td>
-                    <td className="border px-4 py-3">
+                    <td className="border border-blue-100 px-3 py-1.5">{overtime.position}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">
                       <div className="max-w-xs truncate" title={overtime.purposeOfOvertime}>
                         {overtime.purposeOfOvertime}
                       </div>
                     </td>
-                    <td className="border px-4 py-3">{new Date(overtime.inclusiveDateStart).toLocaleDateString()}</td>
-                    <td className="border px-4 py-3">{new Date(overtime.inclusiveDateEnd).toLocaleDateString()}</td>
-                    <td className="border px-4 py-3">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(overtime.headRequisitioningOfficerApproval?.status || 'Pending')}`}>
+                    <td className="border border-blue-100 px-3 py-1.5">{new Date(overtime.inclusiveDateStart).toLocaleDateString()}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">{new Date(overtime.inclusiveDateEnd).toLocaleDateString()}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(overtime.headRequisitioningOfficerApproval?.status || 'Pending')}`}>
                         {overtime.headRequisitioningOfficerApproval?.status || 'Pending'}
                       </span>
                     </td>
-                    <td className="border px-4 py-3 text-center">
+                    <td className="border border-blue-100 px-3 py-1.5 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleViewDetails(overtime)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-xs font-semibold"
                         >
                           Review
                         </button>
                         {overtime.status === 'Approved' && (
                           <button
                             onClick={() => printOvertimeRequest(overtime)}
-                            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+                            className="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition text-xs font-semibold"
                           >
                             Print
                           </button>
@@ -303,10 +303,10 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
 
       {/* Details Modal */}
       {selectedOvertime && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-blue-600 text-white p-6 flex justify-between items-center sticky top-0">
+            <div className="bg-blue-500 text-white p-6 flex justify-between items-center sticky top-0">
               <h2 className="text-2xl font-bold">Overtime Request - Budget Officer Review</h2>
               <button
                 onClick={handleCloseModal}
@@ -409,7 +409,7 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
                   onChange={(e) => setApprovalData({ ...approvalData, remarks: e.target.value })}
                   rows="4"
                   placeholder="Enter remarks for approval/disapproval..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                 />
               </div>
 
@@ -417,14 +417,14 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
               <div className="flex gap-4 justify-end">
                 <button
                   onClick={handleCloseModal}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+                  className="px-6 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
                 >
                   Close
                 </button>
                 {selectedOvertime.status === 'Approved' && (
                   <button
                     onClick={() => printOvertimeRequest(selectedOvertime)}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                    className="px-6 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition text-sm font-semibold"
                   >
                     Print
                   </button>
@@ -432,21 +432,21 @@ function ApproveOvertimeBudgetOfficer({ forcedStatus = 'Pending' }) {
                 <button
                   onClick={handleDisapprove}
                   disabled={actionLoading}
-                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition"
+                  className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-400 transition text-sm font-semibold"
                 >
                   {actionLoading ? 'Processing...' : 'Disapprove'}
                 </button>
                 <button
                   onClick={handleRevise}
                   disabled={actionLoading}
-                  className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-gray-400 transition"
+                  className="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:bg-gray-400 transition text-sm font-semibold"
                 >
                   {actionLoading ? 'Processing...' : 'Send for Revision'}
                 </button>
                 <button
                   onClick={handleApprove}
                   disabled={actionLoading}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition"
+                  className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:bg-gray-400 transition text-sm font-semibold"
                 >
                   {actionLoading ? 'Processing...' : 'Approve'}
                 </button>

@@ -11,9 +11,40 @@ export default function PersonalStep({
   isPermanentSameAsResidential,
   setIsPermanentSameAsResidential,
   setFormData,
+  handlePhotoChange,
 }) {
   return (
     <>
+      <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <label className="block text-sm font-semibold text-gray-800 mb-2">
+          Passport-Sized Photo <span className="text-red-600">*</span>
+        </label>
+        <p className="text-xs text-gray-600 mb-3">
+          Upload a recent, unfiltered JPG, PNG, or WebP photo (up to 5 MB). It will appear on your PDS and printed copy.
+        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          {formData.photoDataUrl ? (
+            <img
+              src={formData.photoDataUrl}
+              alt="PDS photo preview"
+              className="h-36 w-28 object-cover border border-gray-300 bg-white"
+            />
+          ) : (
+            <div className="h-36 w-28 flex items-center justify-center border border-dashed border-gray-400 bg-white text-xs text-gray-500 text-center p-2">
+              Photo preview
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handlePhotoChange}
+            disabled={loading}
+            aria-label="Upload passport-sized PDS photo"
+            className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white hover:file:bg-blue-700"
+          />
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3 mt-2">
         <label className="block text-sm font-medium text-gray-700 mb-1">Surname *</label>
         <input
@@ -120,6 +151,114 @@ export default function PersonalStep({
           <option value="Separated">Separated</option>
           <option value="Other">Other</option>
         </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">HEIGHT (m)</label>
+        <input
+          type="text"
+          name="height"
+          value={formData.height}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">WEIGHT (kg)</label>
+        <input
+          type="text"
+          name="weight"
+          value={formData.weight}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">BLOOD TYPE</label>
+        <input
+          type="text"
+          name="bloodType"
+          value={formData.bloodType}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">UMID ID NO.</label>
+        <input
+          type="text"
+          name="gsisNo"
+          value={formData.gsisNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">PAG-IBIG ID NO.</label>
+        <input
+          type="text"
+          name="pagibigNo"
+          value={formData.pagibigNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">PHILHEALTH NO.</label>
+        <input
+          type="text"
+          name="philhealthNo"
+          value={formData.philhealthNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">PhilSys Number (PSN)</label>
+        <input
+          type="text"
+          name="sssNo"
+          value={formData.sssNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">TIN NO.</label>
+        <input
+          type="text"
+          name="tinNo"
+          value={formData.tinNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">AGENCY EMPLOYEE NO.</label>
+        <input
+          type="text"
+          name="agencyEmployeeNo"
+          value={formData.agencyEmployeeNo}
+          onChange={handleChange}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading}
+        />
       </div>
 
       <div className="md:col-span-2">

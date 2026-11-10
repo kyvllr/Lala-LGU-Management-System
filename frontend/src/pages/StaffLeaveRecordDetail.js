@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { TbArrowLeft, TbEdit, TbTrash } from 'react-icons/tb';
+import { TbArrowLeft, TbCalculator, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveRecordAPI } from '../api';
-import { isAdmin, normalizeRole } from '../constants';
+import { isDepartmentStaffManager, normalizeRole } from '../constants';
 import { exportToCsv, importFromCsv } from '../exportCsv';
+import LEAVE_TYPE_OPTIONS from '../leaveTypes';
 
 // ...existing code...
 
@@ -117,31 +118,32 @@ function getRecordFromTo(record) {
   return { from: 'N/A', to: 'N/A' };
 }
 
+function getRecordNumberOfDays(record) {
+  const savedDays = Number(record?.numberOfDays);
+  if (Number.isFinite(savedDays) && savedDays > 0) return savedDays;
+
+  const balanceUsage =
+    (Number(record?.vlAbsentUndertimeWPay) || 0) +
+    (Number(record?.slAbsentUndertimeWPay) || 0);
+  if (balanceUsage > 0) return balanceUsage;
+
+  if (!Array.isArray(record?.dateRanges)) return 0;
+  return record.dateRanges.reduce((total, range) => {
+    if (!range?.from || !range?.to) return total;
+    const from = new Date(range.from);
+    const to = new Date(range.to);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return total;
+
+    const fromDay = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+    const toDay = Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate());
+    return toDay >= fromDay ? total + (toDay - fromDay) / 86400000 + 1 : total;
+  }, 0);
+}
+
 function StaffLeaveRecordDetail() {
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
   const hasNavigatedRef = useRef(false);
-  const particularsOptions = [
-    '10-day VAWC Leave',
-    'Adoption Leave',
-    'Calamity',
-    'CTO',
-    'Earned Leave',
-    'Maternity Leave',
-    'Monetization',
-    'Peternity Leave',
-    'Rehabilitation Privilege',
-    'Sick Leave',
-    'SLB for Women',
-    'Solo Parent Leave',
-    'SPL', // Special Privilege Leave
-    'Study Leave',
-    'Tardy',
-    'Undertime',
-    'Vacation Leave',
-    'Wellness'
-  ];
-
   const { staffId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,12 +162,14 @@ function StaffLeaveRecordDetail() {
     sickLeaveAbsent: 0,
     vacationLeaveEarned: 0,
     sickLeaveEarned: 0,
+    totalDaysUsed: 0,
   });
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const summaryRef = React.useRef();
   const [conversionUnit, setConversionUnit] = useState('days');
   const [showConverter, setShowConverter] = useState(false);
+  const [convertedCellMap, setConvertedCellMap] = useState({});
 
   // Print handler for leave summary
   const handlePrintSummary = () => {
@@ -193,6 +197,8 @@ function StaffLeaveRecordDetail() {
     const middleInitial = middleName ? middleName.charAt(0).toUpperCase() + '.' : '';
     const division = staff.division || staff.department || staff.office || '';
     const firstDayOfService = staff.firstDayOfService || staff.first_day_of_service || staff.dateHired || '';
+    const logoUrl = `${window.location.origin}/logo.PNG`;
+    const bagongPilipinasUrl = `${window.location.origin}/Bagong%20Pilipinas.png`;
     const printContents = summaryRef.current.innerHTML;
     // Prepare table with 26 rows (fill with blanks if needed)
     let tableHtml = summaryRef.current.innerHTML;
@@ -228,6 +234,8 @@ function StaffLeaveRecordDetail() {
             tbody.appendChild(tr);
           }
         }
+        // The print window does not load Tailwind classes, so strip interactive controls explicitly.
+        tempDiv.querySelectorAll('button').forEach((button) => button.remove());
         tableHtml = tempDiv.innerHTML;
       }
     } catch (e) { /* fallback: do nothing */ }
@@ -239,11 +247,25 @@ function StaffLeaveRecordDetail() {
           <style>
             @page { size: 8.5in 13in; margin: 0.7in; }
             body { font-family: Arial, sans-serif; margin: 0.7in; }
-            .print-header { text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 32px; }
+            .print-brand-header {
+              display: grid;
+              grid-template-columns: 1fr 2fr 1fr;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 18px;
+            }
+            .print-brand-logo {
+              width: 76px;
+              height: 76px;
+              object-fit: contain;
+              justify-self: center;
+              transform: translateY(-12px);
+            }
+            .print-header { text-align: center; font-size: 22px; font-weight: bold; }
             .print-meta-header {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 32px;
+              margin-bottom: 45px;
               width: 100%;
             }
             .print-meta-item {
@@ -273,7 +295,11 @@ function StaffLeaveRecordDetail() {
           </style>
         </head>
         <body>
-          <div class="print-header">EMPLOYEE'S LEAVE RECORD</div>
+          <div class="print-brand-header">
+            <img class="print-brand-logo" src="${logoUrl}" alt="Municipality of Lala seal">
+            <div class="print-header">EMPLOYEE'S LEAVE RECORD</div>
+            <img class="print-brand-logo" src="${bagongPilipinasUrl}" alt="Bagong Pilipinas">
+          </div>
           <div class="print-meta-header">
             <div class="print-meta-item">
               <div class="print-meta-underline">
@@ -296,10 +322,18 @@ function StaffLeaveRecordDetail() {
     `);
     printWindow.document.close();
     printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 500);
+    Promise.all(Array.from(printWindow.document.images, (image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      });
+    })).then(() => {
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 100);
+    });
   };
 
   // Conversion helpers: values are stored in days. Convert for display.
@@ -318,21 +352,59 @@ function StaffLeaveRecordDetail() {
     }
   };
 
+  const formatAmount = (value, minimumFractionDigits = 2) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '';
+    return number.toLocaleString('en-US', {
+      minimumFractionDigits,
+      maximumFractionDigits: 6,
+      useGrouping: false,
+    });
+  };
+
   const formatConverted = (days, unit) => {
     const converted = convertValue(days, unit);
     if (isNaN(converted) || converted === 0) return '';
-    if (unit === 'minutes') return Math.round(converted).toString();
-    return converted.toFixed(2);
+    return formatAmount(converted);
+  };
+
+  const formatConvertedAllowZero = (days, unit) => {
+    const converted = convertValue(days, unit);
+    if (isNaN(converted)) return '';
+    return formatAmount(converted);
+  };
+
+  const formatBalance = (days, unit) => {
+    const converted = convertValue(days, unit);
+    return Number.isFinite(converted) ? converted.toFixed(4) : '';
   };
 
   const formatUndertimeMinutes = (days) => {
     const value = Number(days) || 0;
     if (value === 0) return '';
-    return Math.round(value * 24 * 60).toString();
+    return formatAmount(value * 24 * 60);
   };
 
-  const isUndertimeParticulars = (particulars) =>
-    String(particulars || '').toLowerCase().includes('undertime');
+  const formatRecordLeaveAmount = (value, particulars) => {
+    const amount = Number(value) || 0;
+    if (amount === 0) return '0.00';
+    const formattedAmount = formatAmount(amount);
+    return isTardyOrUndertimeParticulars(particulars)
+      ? `${formattedAmount} (${formatUndertimeMinutes(amount)} min)`
+      : formattedAmount;
+  };
+
+  const isTardyOrUndertimeParticulars = (particulars) => {
+    const normalized = String(particulars || '').toLowerCase();
+    return normalized.includes('undertime') || normalized.includes('tardy');
+  };
+
+  const toggleCellConversion = (cellKey) => {
+    setConvertedCellMap((prev) => ({
+      ...prev,
+      [cellKey]: !prev[cellKey],
+    }));
+  };
   const [activeTab, setActiveTab] = useState('records');
   const [editingRecordId, setEditingRecordId] = useState(null);
   const [newRecordData, setNewRecordData] = useState({
@@ -388,7 +460,7 @@ function StaffLeaveRecordDetail() {
     const isAlreadyOnTargetPath = !!targetPath && location.pathname === targetPath;
     
     if (
-      !isAdmin(normalizedRole) &&
+      !isDepartmentStaffManager(normalizedRole) &&
       ownStaffIdStr &&
       ownStaffIdStr !== routeStaffIdStr &&
       !isAlreadyOnTargetPath &&
@@ -426,7 +498,7 @@ function StaffLeaveRecordDetail() {
           staffData = staffRes.data;
           console.log('[fetchData] Staff data received:', JSON.stringify(staffData));
           
-          // The URL param IS the staff ID (it's passed as staff.id from EmployeeLeaveRecord)
+          // The URL param IS the Item Number (it's passed as staff.id from EmployeeLeaveRecord)
           // So we can use it directly
           actualStaffId = staffId;
           console.log('[fetchData] Using URL param as actualStaffId:', actualStaffId);
@@ -523,21 +595,52 @@ function StaffLeaveRecordDetail() {
       let slAbsent = 0;
       let vlEarned = 0;
       let slEarned = 0;
+      let vlBalanceDeduction = 0;
+      let totalDaysUsed = 0;
 
       // Only VL, SL, Undertime, Tardy, and Earned Leave affect balances
       records.forEach(record => {
         const particulars = String(record.particulars || '').toLowerCase();
+        const vacationLeaveDeduction = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+          ? parseFloat(record.vlAbsentUndertimeWPay) || parseFloat(record.numberOfDays) || 0
+          : parseFloat(record.vlAbsentUndertimeWPay) || 0;
+
+        // Count all non-earned approved leave usages (including Wellness) in the summary card.
+        if (!particulars.includes('earned leave')) {
+          if (particulars.includes('undertime') || particulars.includes('tardy')) {
+            totalDaysUsed +=
+              (parseFloat(record.vlAbsentUndertimeWPay) || 0) +
+              (parseFloat(record.slAbsentUndertimeWPay) || 0);
+          } else if (Number(record.numberOfDays) > 0) {
+            const explicitDays = parseFloat(record.numberOfDays);
+            totalDaysUsed += explicitDays;
+          } else {
+            const inferredDays =
+              (parseFloat(record.vlAbsentUndertimeWPay) || 0) +
+              (parseFloat(record.slAbsentUndertimeWPay) || 0);
+            totalDaysUsed += inferredDays;
+          }
+        }
+
         // Vacation Leave balance
         if (
           particulars.includes('vacation leave') ||
+          particulars.includes('wellness') ||
           particulars === 'vl' ||
+          particulars === 'mandatory/force leave' ||
+          particulars === 'monetization' ||
+          particulars === 'wellness' ||
           particulars.includes('earned leave')
         ) {
           vlEarned += parseFloat(record.vlEarned) || 0;
-          vlAbsent += parseFloat(record.vlAbsentUndertimeWPay) || 0;
+          const vlAbsentForRecord = vacationLeaveDeduction;
+          vlAbsent += vlAbsentForRecord;
+          vlBalanceDeduction += vlAbsentForRecord;
         } else if (particulars.includes('undertime') || particulars.includes('tardy')) {
           // Only count undertime/tardy for VL if not SL
-          vlAbsent += parseFloat(record.vlAbsentUndertimeWPay) || 0;
+          const vlAbsentForRecord = parseFloat(record.vlAbsentUndertimeWPay) || 0;
+          vlAbsent += vlAbsentForRecord;
+          vlBalanceDeduction += vlAbsentForRecord;
         }
         // Sick Leave balance
         if (
@@ -554,7 +657,7 @@ function StaffLeaveRecordDetail() {
       });
 
       // Balance = Earned - Absent
-      vlBalance = vlEarned - vlAbsent;
+      vlBalance = vlEarned - vlBalanceDeduction;
       slBalance = slEarned - slAbsent;
 
       setLeaveBalance({
@@ -564,6 +667,7 @@ function StaffLeaveRecordDetail() {
         sickLeaveAbsent: slAbsent,
         vacationLeaveEarned: vlEarned,
         sickLeaveEarned: slEarned,
+        totalDaysUsed,
       });
     } catch (err) {
       console.error('[calculateLeaveBalance] Error:', err);
@@ -583,7 +687,7 @@ function StaffLeaveRecordDetail() {
     setAddError('');
     console.log('[handleAddRecord] Started - staffId:', staffId);
 
-    if (!user || !isAdmin(user.role)) {
+    if (!user || !isDepartmentStaffManager(user.role)) {
       setAddError('Only admins can add leave records');
       console.error('[handleAddRecord] User is not admin');
       return;
@@ -613,6 +717,11 @@ function StaffLeaveRecordDetail() {
         dateRanges: newRecordDateRanges,
         period: '', // legacy, not used
         particulars: formData.particulars,
+        numberOfDays: getRecordNumberOfDays({
+          dateRanges: newRecordDateRanges,
+          vlAbsentUndertimeWPay: formData.vlAbsentUndertimeWPay,
+          slAbsentUndertimeWPay: formData.slAbsentUndertimeWPay,
+        }),
         vlEarned: parseFloat(formData.vlEarned) || 0,
         vlAbsentUndertimeWPay: parseFloat(formData.vlAbsentUndertimeWPay) || 0,
         slEarned: parseFloat(formData.slEarned) || 0,
@@ -648,7 +757,7 @@ function StaffLeaveRecordDetail() {
   };
 
   const handleDeleteLeave = async (recordId) => {
-    if (!user || !isAdmin(user.role)) {
+    if (!user || !isDepartmentStaffManager(user.role)) {
       alert('Only admins can delete leave records');
       return;
     }
@@ -721,7 +830,7 @@ function StaffLeaveRecordDetail() {
       console.log('[handleSaveNewRecord] Using actualStaffId:', actualStaffId);
       console.log('[handleSaveNewRecord] Staff data:', staff);
       if (!actualStaffId) {
-        alert('Staff ID not found. Please reload the page.');
+        alert('Item Number not found. Please reload the page.');
         return;
       }
       await leaveRecordAPI.create({
@@ -730,6 +839,11 @@ function StaffLeaveRecordDetail() {
         dateRanges: newRecordDateRanges,
         period: '', // legacy, not used
         particulars: newRecordData.particulars,
+        numberOfDays: getRecordNumberOfDays({
+          dateRanges: newRecordDateRanges,
+          vlAbsentUndertimeWPay: newRecordData.vlAbsentUndertimeWPay,
+          slAbsentUndertimeWPay: newRecordData.slAbsentUndertimeWPay,
+        }),
         vlEarned: parseFloat(newRecordData.vlEarned) || 0,
         vlAbsentUndertimeWPay: parseFloat(newRecordData.vlAbsentUndertimeWPay) || 0,
         slEarned: parseFloat(newRecordData.slEarned) || 0,
@@ -783,6 +897,11 @@ function StaffLeaveRecordDetail() {
         dateRanges: editRecordDateRanges,
         period: '', // legacy, not used
         particulars: editRecordData.particulars,
+        numberOfDays: getRecordNumberOfDays({
+          dateRanges: editRecordDateRanges,
+          vlAbsentUndertimeWPay: editRecordData.vlAbsentUndertimeWPay,
+          slAbsentUndertimeWPay: editRecordData.slAbsentUndertimeWPay,
+        }),
         vlEarned: parseFloat(editRecordData.vlEarned) || 0,
         vlAbsentUndertimeWPay: parseFloat(editRecordData.vlAbsentUndertimeWPay) || 0,
         slEarned: parseFloat(editRecordData.slEarned) || 0,
@@ -831,16 +950,22 @@ function StaffLeaveRecordDetail() {
     const filtered = leaveRecords.map(r => {
       const obj = {};
       const particulars = String(r.particulars || '').toLowerCase();
+      const vacationLeaveDeduction = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+        ? parseFloat(r.vlAbsentUndertimeWPay) || parseFloat(r.numberOfDays) || 0
+        : parseFloat(r.vlAbsentUndertimeWPay) || 0;
 
       if (
         particulars.includes('vacation leave') ||
         particulars === 'vl' ||
+        particulars === 'mandatory/force leave' ||
+        particulars === 'monetization' ||
+        particulars === 'wellness' ||
         particulars.includes('undertime') ||
         particulars.includes('tardy') ||
         particulars.includes('earned leave')
       ) {
         vlCumulativeBalance +=
-          (parseFloat(r.vlEarned) || 0) - (parseFloat(r.vlAbsentUndertimeWPay) || 0);
+          (parseFloat(r.vlEarned) || 0) - vacationLeaveDeduction;
       }
 
       if (
@@ -861,11 +986,11 @@ function StaffLeaveRecordDetail() {
       obj['vlEarned'] = r['vlEarned'] ?? '';
       obj['vlAbsentUndertimeWPay'] = r['vlAbsentUndertimeWPay'] ?? '';
       const vlExportBalance = Math.max(0, vlCumulativeBalance);
-      obj['vlBalance'] = vlExportBalance === 0 ? '' : vlExportBalance.toFixed(2);
+      obj['vlBalance'] = vlExportBalance === 0 ? '' : vlExportBalance.toFixed(4);
       obj['slEarned'] = r['slEarned'] ?? '';
       obj['slAbsentUndertimeWPay'] = r['slAbsentUndertimeWPay'] ?? '';
       const slExportBalance = Math.max(0, slCumulativeBalance);
-      obj['slBalance'] = slExportBalance === 0 ? '' : slExportBalance.toFixed(2);
+      obj['slBalance'] = slExportBalance === 0 ? '' : slExportBalance.toFixed(4);
       obj['cto'] = r['cto'] ?? '';
       return obj;
     });
@@ -989,6 +1114,22 @@ function StaffLeaveRecordDetail() {
   if (importing) return <div className="text-center p-8 text-blue-600 font-bold">Importing records...</div>;
   if (importSuccess) return <div className="text-center p-8 text-green-600 font-bold">Import successful!</div>;
 
+  const wellnessBalancesByRecord = new Map();
+  const wellnessBalanceByYear = new Map();
+  leaveRecords.forEach((record, index) => {
+    const firstRange = Array.isArray(record.dateRanges) ? record.dateRanges[0] : null;
+    const recordDate = new Date(firstRange?.from || firstRange?.startDate || record.period || record.createdAt);
+    const year = Number.isNaN(recordDate.getTime()) ? new Date().getFullYear() : recordDate.getFullYear();
+    const previousBalance = wellnessBalanceByYear.has(year) ? wellnessBalanceByYear.get(year) : 5;
+    const particulars = String(record.particulars || '').trim().toLowerCase();
+    const balance = particulars === 'wellness'
+      ? Math.max(0, previousBalance - (Number(record.numberOfDays) || 0))
+      : previousBalance;
+
+    wellnessBalanceByYear.set(year, balance);
+    wellnessBalancesByRecord.set(record.recordId || record.id || index, balance);
+  });
+
   return (
     <div className="mt-6">
       <div className="flex items-center justify-between mb-6">
@@ -1029,15 +1170,15 @@ function StaffLeaveRecordDetail() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-blue-50 p-4 rounded border border-blue-200">
           <p className="text-sm text-gray-600 mb-1">Vacation Leave Balance</p>
-          <p className="text-2xl font-bold text-blue-600">{typeof leaveBalance.vacationLeaveBalance === 'number' && !isNaN(leaveBalance.vacationLeaveBalance) ? leaveBalance.vacationLeaveBalance.toFixed(2) : ''}</p>
+          <p className="text-2xl font-bold text-blue-600">{formatAmount(leaveBalance.vacationLeaveBalance)}</p>
         </div>
         <div className="bg-green-50 p-4 rounded border border-green-200">
           <p className="text-sm text-gray-600 mb-1">Sick Leave Balance</p>
-          <p className="text-2xl font-bold text-green-600">{typeof leaveBalance.sickLeaveBalance === 'number' && !isNaN(leaveBalance.sickLeaveBalance) ? leaveBalance.sickLeaveBalance.toFixed(2) : ''}</p>
+          <p className="text-2xl font-bold text-green-600">{formatAmount(leaveBalance.sickLeaveBalance)}</p>
         </div>
         <div className="bg-purple-50 p-4 rounded border border-purple-200">
           <p className="text-sm text-gray-600 mb-1">Total Days Used</p>
-          <p className="text-2xl font-bold text-purple-600">{typeof leaveBalance.vacationLeaveAbsent === 'number' && typeof leaveBalance.sickLeaveAbsent === 'number' && !isNaN(leaveBalance.vacationLeaveAbsent + leaveBalance.sickLeaveAbsent) ? (leaveBalance.vacationLeaveAbsent + leaveBalance.sickLeaveAbsent).toFixed(2) : ''}</p>
+          <p className="text-2xl font-bold text-purple-600">{formatAmount(leaveBalance.totalDaysUsed)}</p>
         </div>
       </div>
 
@@ -1084,7 +1225,8 @@ function StaffLeaveRecordDetail() {
                 <th className="px-6 py-3 text-center font-bold text-gray-700">SL Earned</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT/UNDERTIME/ WITH PAY</th>
                 <th className="px-6 py-3 text-center font-bold text-gray-700">CTO</th>
-                {user && isAdmin(user.role) && (
+                <th className="px-6 py-3 text-center font-bold text-gray-700">Wellness Leave</th>
+                {user && isDepartmentStaffManager(user.role) && (
                   <th className="px-6 py-3 text-center font-bold text-gray-700">Actions</th>
                 )}
               </tr>
@@ -1092,29 +1234,42 @@ function StaffLeaveRecordDetail() {
             <tbody>
               {leaveRecords.length === 0 && !showAddForm && (
                 <tr>
-                  <td colSpan={user && isAdmin(user.role) ? 10 : 9} className="px-6 py-4 text-center text-gray-600">
+                  <td colSpan={user && isDepartmentStaffManager(user.role) ? 11 : 10} className="px-6 py-4 text-center text-gray-600">
                     No leave records found
                   </td>
                 </tr>
               )}
-              {leaveRecords.map((record) => (
+              {leaveRecords.map((record, index) => (
                 <tr key={record.recordId || record.id} className="border-b hover:bg-gray-50 transition">
                   <td className="px-6 py-4 text-gray-800">{getRecordFromTo(record).from}</td>
                   <td className="px-6 py-4 text-gray-800">{getRecordFromTo(record).to}</td>
                   <td className="px-6 py-4 text-gray-800">{record.particulars}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.numberOfDays === 'number' && !isNaN(record.numberOfDays) ? record.numberOfDays.toFixed(2) : (record.numberOfDays ? Number(record.numberOfDays).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">{formatAmount(getRecordNumberOfDays(record))}</td>
                   {/* Late Filing Explanation for leave records, if present */}
                   {record.lateFilingExplanation && (
-                    <td className="px-6 py-4 text-red-600 font-semibold whitespace-pre-line" colSpan={user && isAdmin(user.role) ? 6 : 5}>
+                    <td className="px-6 py-4 text-red-600 font-semibold whitespace-pre-line" colSpan={user && isDepartmentStaffManager(user.role) ? 7 : 6}>
                       Explanation for Late Filing: {record.lateFilingExplanation}
                     </td>
                   )}
                   <td className="px-6 py-4 text-center text-gray-800">{typeof record.vlEarned === 'number' && !isNaN(record.vlEarned) ? record.vlEarned.toFixed(2) : (record.vlEarned ? Number(record.vlEarned).toFixed(2) : '')}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.vlAbsentUndertimeWPay === 'number' && !isNaN(record.vlAbsentUndertimeWPay) ? record.vlAbsentUndertimeWPay.toFixed(2) : (record.vlAbsentUndertimeWPay ? Number(record.vlAbsentUndertimeWPay).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">
+                    {formatRecordLeaveAmount(
+                      Number(record.vlAbsentUndertimeWPay) ||
+                        (['mandatory/force leave', 'monetization', 'wellness'].includes(String(record.particulars || '').toLowerCase())
+                          ? Number(record.numberOfDays)
+                          : 0),
+                      record.particulars
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-center text-gray-800">{typeof record.slEarned === 'number' && !isNaN(record.slEarned) ? record.slEarned.toFixed(2) : (record.slEarned ? Number(record.slEarned).toFixed(2) : '')}</td>
-                  <td className="px-6 py-4 text-center text-gray-800">{typeof record.slAbsentUndertimeWPay === 'number' && !isNaN(record.slAbsentUndertimeWPay) ? record.slAbsentUndertimeWPay.toFixed(2) : (record.slAbsentUndertimeWPay ? Number(record.slAbsentUndertimeWPay).toFixed(2) : '')}</td>
+                  <td className="px-6 py-4 text-center text-gray-800">
+                    {formatRecordLeaveAmount(record.slAbsentUndertimeWPay, record.particulars)}
+                  </td>
                   <td className="px-6 py-4 text-center text-gray-800">{record.cto ? (isNaN(Number(record.cto)) ? '' : Number(record.cto).toFixed(2)) : ''}</td>
-                  {user && isAdmin(user.role) && (
+                  <td className="px-6 py-4 text-center text-gray-800">
+                    {(wellnessBalancesByRecord.get(record.recordId || record.id || index) ?? 5).toFixed(2)}
+                  </td>
+                  {user && isDepartmentStaffManager(user.role) && (
                     <td className="px-6 py-4 text-center flex gap-2 justify-center">
                       <button
                         onClick={() => handleEditLeave(record)}
@@ -1134,7 +1289,7 @@ function StaffLeaveRecordDetail() {
                   )}
                 </tr>
               ))}
-              {showAddForm && user && isAdmin(user.role) && (
+              {showAddForm && user && isDepartmentStaffManager(user.role) && (
                 <tr className="border-b bg-blue-50">
                   <td className="px-6 py-2" colSpan="2">
                     {/* Multiple date range input */}
@@ -1169,7 +1324,7 @@ function StaffLeaveRecordDetail() {
                       required
                     >
                       <option value="">Select</option>
-                      {particularsOptions.map(option => (
+                      {LEAVE_TYPE_OPTIONS.map(option => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
@@ -1178,7 +1333,11 @@ function StaffLeaveRecordDetail() {
                   <td className="px-6 py-2">
                     <input
                       type="number"
-                      value={typeof newRecordData.numberOfDays === 'number' && !isNaN(newRecordData.numberOfDays) ? newRecordData.numberOfDays.toFixed(2) : (newRecordData.numberOfDays ? Number(newRecordData.numberOfDays).toFixed(2) : '0.00')}
+                      value={getRecordNumberOfDays({
+                        dateRanges: newRecordDateRanges,
+                        vlAbsentUndertimeWPay: newRecordData.vlAbsentUndertimeWPay,
+                        slAbsentUndertimeWPay: newRecordData.slAbsentUndertimeWPay,
+                      }).toFixed(2)}
                       disabled
                       className="w-full px-2 py-1 border rounded text-sm text-center bg-gray-100 cursor-not-allowed"
                     />
@@ -1197,7 +1356,7 @@ function StaffLeaveRecordDetail() {
                   <td className="px-6 py-2">
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       name="vlAbsentUndertimeWPay"
                       value={newRecordData.vlAbsentUndertimeWPay}
                       onChange={handleNewRecordChange}
@@ -1218,7 +1377,7 @@ function StaffLeaveRecordDetail() {
                   <td className="px-6 py-2">
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       name="slAbsentUndertimeWPay"
                       value={newRecordData.slAbsentUndertimeWPay}
                       onChange={handleNewRecordChange}
@@ -1234,6 +1393,12 @@ function StaffLeaveRecordDetail() {
                       onChange={handleNewRecordChange}
                       className="w-full px-2 py-1 border rounded text-sm text-center"
                     />
+                  </td>
+                  <td className="px-6 py-2 text-center text-sm text-gray-600">
+                    {String(newRecordData.particulars || '').trim().toLowerCase() === 'wellness'
+                      && Number(newRecordData.numberOfDays) > 0
+                      ? Number(newRecordData.numberOfDays).toFixed(2)
+                      : ''}
                   </td>
                   <td className="px-6 py-2 text-center flex gap-2 justify-center">
                     <button
@@ -1257,7 +1422,7 @@ function StaffLeaveRecordDetail() {
       
 
               {/* Add Record Button (Admin only) - Below Summary Table */}
-      {user && isAdmin(user.role) && (
+      {user && isDepartmentStaffManager(user.role) && (
         <button
           onClick={() => setShowAddForm(!showAddForm)}
           className="mt-6 mb-6 px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition font-semibold"
@@ -1328,6 +1493,12 @@ function StaffLeaveRecordDetail() {
                 ) : (
                   <>
                     {leaveRecords.map((record, index) => {
+                      const recordKey = record.recordId || record.id || index;
+                      const vlCellKey = `${recordKey}-vlAbsentUndertimeWPay`;
+                      const slCellKey = `${recordKey}-slAbsentUndertimeWPay`;
+                      const isVlCellConverted = Boolean(convertedCellMap[vlCellKey]);
+                      const isSlCellConverted = Boolean(convertedCellMap[slCellKey]);
+
                       let vlCumulativeBalance = 0;
                       let slCumulativeBalance = 0;
                       for (let i = 0; i <= index; i++) {
@@ -1335,12 +1506,20 @@ function StaffLeaveRecordDetail() {
                         const particulars = String(rec.particulars || '').toLowerCase();
                         if (
                           particulars.includes('vacation leave') ||
+                          particulars.includes('wellness') ||
                           particulars === 'vl' ||
+                          particulars === 'mandatory/force leave' ||
+                          particulars === 'monetization' ||
+                          particulars === 'wellness' ||
                           particulars.includes('undertime') ||
                           particulars.includes('tardy') ||
                           particulars.includes('earned leave')
                         ) {
-                          vlCumulativeBalance += (parseFloat(rec.vlEarned) || 0) - (parseFloat(rec.vlAbsentUndertimeWPay) || 0);
+                          const vlEarnedValue = parseFloat(rec.vlEarned) || 0;
+                          const vlAbsentValue = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+                            ? parseFloat(rec.vlAbsentUndertimeWPay) || parseFloat(rec.numberOfDays) || 0
+                            : parseFloat(rec.vlAbsentUndertimeWPay) || 0;
+                          vlCumulativeBalance += vlEarnedValue - vlAbsentValue;
                         }
                         if (
                           particulars.includes('sick leave') ||
@@ -1354,24 +1533,64 @@ function StaffLeaveRecordDetail() {
                       }
 
                       return (
-                        <tr key={record.recordId || record.id || index} className="border">
+                        <tr key={recordKey} className="border">
                           <td className="px-4 py-2 border">{getRecordFromTo(record).from}</td>
                           <td className="px-4 py-2 border">{getRecordFromTo(record).to}</td>
                           <td className="px-4 py-2 border">{record.particulars}</td>
                           <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(record.vlEarned)) || Number(record.vlEarned) === 0 ? '' : formatConverted(Number(record.vlEarned), conversionUnit)}</td>
-                          <td className="px-4 py-2 border text-center font-semibold">{isUndertimeParticulars(record.particulars)
-                            ? formatUndertimeMinutes(record.vlAbsentUndertimeWPay)
-                            : (isNaN(Number(record.vlAbsentUndertimeWPay)) || Number(record.vlAbsentUndertimeWPay) === 0
-                              ? ''
-                              : formatConverted(Number(record.vlAbsentUndertimeWPay), conversionUnit))}</td>
-                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(vlCumulativeBalance)) || Number(vlCumulativeBalance) === 0 ? '' : formatConverted(Math.max(0, Number(vlCumulativeBalance)), conversionUnit)}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">
+                            {isTardyOrUndertimeParticulars(record.particulars) ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <span>
+                                  {isNaN(Number(record.vlAbsentUndertimeWPay)) || Number(record.vlAbsentUndertimeWPay) === 0
+                                    ? ''
+                                    : (isVlCellConverted
+                                      ? formatUndertimeMinutes(record.vlAbsentUndertimeWPay)
+                                      : formatConverted(Number(record.vlAbsentUndertimeWPay), conversionUnit))}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCellConversion(vlCellKey)}
+                                  className="print:hidden p-1 rounded hover:bg-gray-200 text-blue-600"
+                                  title={isVlCellConverted ? 'Show default unit' : 'Convert this cell to minutes'}
+                                >
+                                  <TbCalculator size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              isNaN(Number(record.vlAbsentUndertimeWPay)) || Number(record.vlAbsentUndertimeWPay) === 0
+                                ? ''
+                                : formatConverted(Number(record.vlAbsentUndertimeWPay), conversionUnit)
+                            )}
+                          </td>
+                          <td className="px-4 py-2 border text-center font-semibold">{formatBalance(Math.max(0, Number(vlCumulativeBalance)), conversionUnit)}</td>
                           <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(record.slEarned)) || Number(record.slEarned) === 0 ? '' : formatConverted(Number(record.slEarned), conversionUnit)}</td>
-                          <td className="px-4 py-2 border text-center font-semibold">{isUndertimeParticulars(record.particulars)
-                            ? formatUndertimeMinutes(record.slAbsentUndertimeWPay)
-                            : (isNaN(Number(record.slAbsentUndertimeWPay)) || Number(record.slAbsentUndertimeWPay) === 0
-                              ? ''
-                              : formatConverted(Number(record.slAbsentUndertimeWPay), conversionUnit))}</td>
-                          <td className="px-4 py-2 border text-center font-semibold">{isNaN(Number(slCumulativeBalance)) || Number(slCumulativeBalance) === 0 ? '' : formatConverted(Math.max(0, Number(slCumulativeBalance)), conversionUnit)}</td>
+                          <td className="px-4 py-2 border text-center font-semibold">
+                            {isTardyOrUndertimeParticulars(record.particulars) ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <span>
+                                  {isNaN(Number(record.slAbsentUndertimeWPay)) || Number(record.slAbsentUndertimeWPay) === 0
+                                    ? ''
+                                    : (isSlCellConverted
+                                      ? formatUndertimeMinutes(record.slAbsentUndertimeWPay)
+                                      : formatConverted(Number(record.slAbsentUndertimeWPay), conversionUnit))}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCellConversion(slCellKey)}
+                                  className="print:hidden p-1 rounded hover:bg-gray-200 text-blue-600"
+                                  title={isSlCellConverted ? 'Show default unit' : 'Convert this cell to minutes'}
+                                >
+                                  <TbCalculator size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              isNaN(Number(record.slAbsentUndertimeWPay)) || Number(record.slAbsentUndertimeWPay) === 0
+                                ? ''
+                                : formatConverted(Number(record.slAbsentUndertimeWPay), conversionUnit)
+                            )}
+                          </td>
+                          <td className="px-4 py-2 border text-center font-semibold">{formatBalance(Math.max(0, Number(slCumulativeBalance)), conversionUnit)}</td>
                         </tr>
                       );
                     })}
@@ -1380,10 +1599,10 @@ function StaffLeaveRecordDetail() {
                       <td colSpan="3" className="px-4 py-2 border text-right">TOTAL:</td>
                       <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveEarned === 'number' && !isNaN(leaveBalance.vacationLeaveEarned) && leaveBalance.vacationLeaveEarned !== 0 ? formatConverted(leaveBalance.vacationLeaveEarned, conversionUnit) : ''}</td>
                       <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveAbsent === 'number' && !isNaN(leaveBalance.vacationLeaveAbsent) && leaveBalance.vacationLeaveAbsent !== 0 ? formatConverted(leaveBalance.vacationLeaveAbsent, conversionUnit) : ''}</td>
-                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveBalance === 'number' && !isNaN(leaveBalance.vacationLeaveBalance) && leaveBalance.vacationLeaveBalance !== 0 ? formatConverted(leaveBalance.vacationLeaveBalance, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.vacationLeaveBalance === 'number' && !isNaN(leaveBalance.vacationLeaveBalance) ? formatBalance(leaveBalance.vacationLeaveBalance, conversionUnit) : ''}</td>
                       <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveEarned === 'number' && !isNaN(leaveBalance.sickLeaveEarned) && leaveBalance.sickLeaveEarned !== 0 ? formatConverted(leaveBalance.sickLeaveEarned, conversionUnit) : ''}</td>
                       <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveAbsent === 'number' && !isNaN(leaveBalance.sickLeaveAbsent) && leaveBalance.sickLeaveAbsent !== 0 ? formatConverted(leaveBalance.sickLeaveAbsent, conversionUnit) : ''}</td>
-                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveBalance === 'number' && !isNaN(leaveBalance.sickLeaveBalance) && leaveBalance.sickLeaveBalance !== 0 ? formatConverted(leaveBalance.sickLeaveBalance, conversionUnit) : ''}</td>
+                      <td className="px-4 py-2 border text-center">{typeof leaveBalance.sickLeaveBalance === 'number' && !isNaN(leaveBalance.sickLeaveBalance) ? formatBalance(leaveBalance.sickLeaveBalance, conversionUnit) : ''}</td>
                     </tr>
                   </>
                 )}
@@ -1434,7 +1653,7 @@ function StaffLeaveRecordDetail() {
                   required
                 >
                   <option value="">Select</option>
-                  {particularsOptions.map(option => (
+                  {LEAVE_TYPE_OPTIONS.map(option => (
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
@@ -1457,7 +1676,7 @@ function StaffLeaveRecordDetail() {
                 <label className="block text-sm font-semibold mb-1">VL ABSENT/UNDERTIME/ WITH PAY</label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
                   name="vlAbsentUndertimeWPay"
                   value={editRecordData.vlAbsentUndertimeWPay}
                   onChange={handleEditRecordChange}
@@ -1482,7 +1701,7 @@ function StaffLeaveRecordDetail() {
                 <label className="block text-sm font-semibold mb-1">SL Absent W/PAY</label>
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
                   name="slAbsentUndertimeWPay"
                   value={editRecordData.slAbsentUndertimeWPay}
                   onChange={handleEditRecordChange}

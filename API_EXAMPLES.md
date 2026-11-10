@@ -68,22 +68,37 @@ curl -X POST http://localhost:5001/leaves \
   }'
 ```
 
-### 3. Get All Leave Requests
+### 3. File a Wellness Leave Request
+```bash
+curl -X POST http://localhost:5001/leaves \
+  -H "Content-Type: application/json" \
+  -d '{
+    "leaveId": "LV003",
+    "staffId": "STF001",
+    "staffName": "John Doe",
+    "leaveType": "Wellness",
+    "startDate": "2026-02-15",
+    "endDate": "2026-02-15",
+    "reason": "Mental health and wellness day"
+  }'
+```
+
+### 4. Get All Leave Requests
 ```bash
 curl -X GET http://localhost:5001/leaves
 ```
 
-### 4. Get Pending Leave Requests
+### 5. Get Pending Leave Requests
 ```bash
 curl -X GET http://localhost:5001/leaves?status=Pending
 ```
 
-### 5. Get Staff's Leave History
+### 6. Get Staff's Leave History
 ```bash
 curl -X GET http://localhost:5001/leaves/staff/STF001
 ```
 
-### 6. Get Single Leave Request
+### 7. Get Single Leave Request
 ```bash
 curl -X GET http://localhost:5001/leave/LV001
 ```

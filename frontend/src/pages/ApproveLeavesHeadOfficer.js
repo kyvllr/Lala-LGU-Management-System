@@ -83,12 +83,18 @@ async function enrichLeaveWithBalance(leave) {
 
     recordsBeforeApplication.forEach((record) => {
       const particulars = String(record.particulars || '').toLowerCase();
-      const vlDelta = (parseFloat(record.vlEarned) || 0) - (parseFloat(record.vlAbsentUndertimeWPay) || 0);
+      const vacationLeaveDeduction = ['mandatory/force leave', 'monetization', 'wellness'].includes(particulars)
+        ? parseFloat(record.vlAbsentUndertimeWPay) || parseFloat(record.numberOfDays) || 0
+        : parseFloat(record.vlAbsentUndertimeWPay) || 0;
+      const vlDelta = (parseFloat(record.vlEarned) || 0) - vacationLeaveDeduction;
       const slDelta = (parseFloat(record.slEarned) || 0) - (parseFloat(record.slAbsentUndertimeWPay) || 0);
 
       if (
         particulars.includes('vacation leave') ||
         particulars === 'vl' ||
+        particulars === 'mandatory/force leave' ||
+        particulars === 'monetization' ||
+        particulars === 'wellness' ||
         particulars.includes('undertime') ||
         particulars.includes('tardy') ||
         particulars.includes('earned leave')
@@ -340,7 +346,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
     }
   };
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
   // Filter leaves based on search query and attribute
   const filteredLeaves = leaves.filter((leave) => {
@@ -360,16 +366,16 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
 
   return (
     <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-2">Approve Leave Requests</h1>
-      <p className="text-gray-600 mb-6 text-sm">Head Officer Approval Level - First stage of approval</p>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Approve Leave Requests</h1>
+      <p className="text-blue-700/80 mb-6 text-sm">Head Officer Approval Level - First stage of approval</p>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Requests List */}
         <div className="lg:col-span-1">
           {/* Search and Filter Bar */}
-          <div className="mb-4 flex flex-col sm:flex-row gap-2 w-full">
+          <div className="mb-4 flex flex-col sm:flex-row gap-2 w-full rounded-lg border border-blue-100 bg-blue-50/60 p-3">
             <div className="relative flex-1">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -377,7 +383,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                 placeholder="Search leave requests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               />
             </div>
             <select
@@ -386,7 +392,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                 setFilterAttribute(e.target.value);
                 setSearchQuery('');
               }}
-              className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white cursor-pointer"
+              className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 text-sm font-medium bg-white cursor-pointer"
             >
               <option value="staffName">Staff Name</option>
               <option value="leaveType">Leave Type</option>
@@ -400,20 +406,20 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
               <div
                 key={leave.leaveId}
                 onClick={() => setSelectedLeave(leave)}
-                className={`bg-white p-4 rounded shadow cursor-pointer transition ${
-                  selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-600' : ''
+                className={`bg-white p-4 rounded-lg border border-blue-100 shadow-sm cursor-pointer transition ${
+                  selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-500' : ''
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold">{leave.staffName}</h3>
-                    <p className="text-gray-600 text-sm">{leave.leaveType}</p>
-                    <p className="text-gray-600 text-sm">
+                    <h3 className="font-semibold text-blue-950">{leave.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm">{leave.leaveType}</p>
+                    <p className="text-blue-700/80 text-sm">
                       {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm block">
+                    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-semibold block">
                       {leave.numberOfDays} days
                     </span>
                   </div>
@@ -431,28 +437,28 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
 
         {/* Approval Panel */}
         {selectedLeave && (
-          <div className="bg-white p-6 rounded shadow lg:col-span-1">
-            <h2 className="text-xl font-bold mb-4">Leave Details</h2>
+          <div className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm lg:col-span-1">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Leave Details</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <div>
-                <p className="text-gray-600 text-sm">Staff</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Staff</p>
                 <p className="font-bold">{selectedLeave.staffName}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Date Filed</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date Filed</p>
                 <p className="font-bold">{formatDate(selectedLeave.filingDate || selectedLeave.createdAt)}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Office/Department</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Office/Department</p>
                 <p className="font-bold">{selectedLeave.office || selectedLeave.staffDepartment || 'N/A'}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Type</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Type</p>
                 <p className="font-bold">{selectedLeave.leaveType}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Duration</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Duration</p>
                 <p className="font-bold">
                   {Array.isArray(selectedLeave.dateRanges) && selectedLeave.dateRanges.length > 0
                     ? formatDateRanges(selectedLeave.dateRanges)
@@ -460,11 +466,11 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                 </p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Days</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Days</p>
                 <p className="font-bold">{selectedLeave.numberOfDays ?? 'N/A'}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Communication</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Communication</p>
                 <p className="font-bold">
                   {selectedLeave.communicationRequested
                     ? 'Requested'
@@ -478,7 +484,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
             {/* Late Filing Explanation */}
             {selectedLeave.lateFilingExplanation && (
               <div className="mb-4">
-                <p className="text-gray-600 text-sm font-semibold">Explanation for Late Filing</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide font-semibold">Explanation for Late Filing</p>
                 <p className="font-bold text-red-600 whitespace-pre-line">{selectedLeave.lateFilingExplanation}</p>
               </div>
             )}
@@ -490,7 +496,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 ></textarea>
               </div>
 
@@ -501,14 +507,14 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     const enrichedLeave = await enrichLeaveWithBalance(selectedLeave);
                     openPrintWindow(enrichedLeave);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-blue-600 hover:bg-blue-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
                 >
                   Print
                 </button>
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded text-white font-bold bg-green-600 hover:bg-green-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve & Forward to Admin
                 </button>
@@ -518,7 +524,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-red-600 hover:bg-red-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -528,7 +534,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-amber-600 hover:bg-amber-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Request Revision
                 </button>
@@ -539,29 +545,29 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
               onChange={(e) => setDisapproveComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Reason for disapproval"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowDisapproveModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDisapprove}
-                className="px-4 py-2 rounded bg-red-600 text-white"
+                className="px-4 py-2 rounded-md bg-red-500 text-white text-sm font-semibold"
               >
                 Confirm Disapprove
               </button>
@@ -571,29 +577,29 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Request Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}
               onChange={(e) => setRevisionComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Required revisions"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowRevisionModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleApproveWithRevision}
-                className="px-4 py-2 rounded bg-amber-600 text-white"
+                className="px-4 py-2 rounded-md bg-orange-500 text-white text-sm font-semibold"
               >
                 Send for Revision
               </button>

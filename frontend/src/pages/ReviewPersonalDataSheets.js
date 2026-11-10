@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { personalDataSheetAPI } from '../api';
 
+const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+
 export default function ReviewPersonalDataSheets() {
   const navigate = useNavigate();
   const [sheets, setSheets] = useState([]);
@@ -15,12 +17,15 @@ export default function ReviewPersonalDataSheets() {
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionRemarks, setRevisionRemarks] = useState('');
   const [revisionTargetPdsId, setRevisionTargetPdsId] = useState('');
+  const [permissionActioningId, setPermissionActioningId] = useState('');
 
   const fetchSheets = async () => {
     try {
       setLoading(true);
       const response = await personalDataSheetAPI.getAll();
-      setSheets(response.data);
+      const allSheets = Array.isArray(response.data) ? response.data : [];
+      const requestSheets = allSheets.filter((sheet) => normalizeStatus(sheet?.status) !== 'approved');
+      setSheets(requestSheets);
       setError('');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch Personal Data Sheet submissions.');
@@ -99,6 +104,28 @@ export default function ReviewPersonalDataSheets() {
     });
   };
 
+  const handleSetUpdatePermission = async (sheet, allowUpdate) => {
+    if (!sheet?.pdsId) return;
+
+    try {
+      setPermissionActioningId(sheet.pdsId);
+      setError('');
+
+      const response = await personalDataSheetAPI.setUpdatePermission(sheet.pdsId, allowUpdate);
+      const updatedSheet = response.data?.pds;
+
+      if (updatedSheet) {
+        setSelectedSheet((prev) => (prev?.pdsId === updatedSheet.pdsId ? { ...prev, ...updatedSheet } : prev));
+      }
+
+      await fetchSheets();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update user permission.');
+    } finally {
+      setPermissionActioningId('');
+    }
+  };
+
   const formatAddress = (address) => {
     if (!address) return 'N/A';
     if (typeof address === 'string') return address || 'N/A';
@@ -131,7 +158,7 @@ export default function ReviewPersonalDataSheets() {
   if (loading) {
     return (
       <div className="p-6">
-        <p className="text-gray-600">Loading Personal Data Sheet submissions...</p>
+        <p className="text-blue-700 font-medium">Loading Personal Data Sheet submissions...</p>
       </div>
     );
   }
@@ -140,10 +167,10 @@ export default function ReviewPersonalDataSheets() {
     <div className="p-6">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Personal Data Sheet Reviews</h1>
-          <p className="text-1xl text-gray-400">Review submitted Personal Data Sheets from applicants</p>
+          <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Personal Data Sheet Reviews</h1>
+          <p className="text-sm text-blue-700/80">Review submitted Personal Data Sheets from applicants</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2">
           <div className="relative">
             <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
@@ -153,16 +180,16 @@ export default function ReviewPersonalDataSheets() {
               placeholder="Search by PDS ID, name, email, mobile..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 w-80 pl-10"
+              className="border border-blue-200 rounded-md px-3 py-2 w-80 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
             />
           </div>
-          <label className="text-sm text-gray-600">From</label>
-          <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className="border border-gray-300 rounded px-2 py-1" />
-          <label className="text-sm text-gray-600">To</label>
-          <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className="border border-gray-300 rounded px-2 py-1" />
+          <label className="text-xs font-semibold tracking-wide text-blue-800 uppercase">From</label>
+          <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className="border border-blue-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white" />
+          <label className="text-xs font-semibold tracking-wide text-blue-800 uppercase">To</label>
+          <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className="border border-blue-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white" />
           <button
             onClick={() => { setSearchText(''); setFilterFrom(''); setFilterTo(''); }}
-            className="bg-gray-200 text-gray-800 px-3 py-1 rounded hover:bg-gray-300 transition"
+            className="bg-slate-600 text-white px-3 py-1.5 rounded-md hover:bg-slate-700 transition text-xs font-semibold"
           >
             Clear
           </button>
@@ -221,17 +248,17 @@ export default function ReviewPersonalDataSheets() {
         }
 
         return (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+          <div className="overflow-x-auto rounded-lg border border-blue-100">
+            <table className="w-full border-collapse text-[13px] text-slate-700">
               <thead>
-                <tr className="bg-gray-200">
-                  <th className="border border-gray-300 px-4 py-2 text-left">PDS ID</th>
-                  <th className="border border-gray-300 px-4 py-2 text-left">Full Name</th>
-                  <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
-                  <th className="border border-gray-300 px-4 py-2 text-left">Mobile</th>
-                  <th className="border border-gray-300 px-4 py-2 text-left">Status</th>
-                  <th className="border border-gray-300 px-4 py-2 text-left">Submitted</th>
-                  <th className="border border-gray-300 px-4 py-2 text-center">Actions</th>
+                <tr className="bg-blue-100/80 text-blue-900">
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">PDS ID</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Full Name</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Email</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Mobile</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Status</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Submitted</th>
+                  <th className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,14 +268,14 @@ export default function ReviewPersonalDataSheets() {
                     .join(', ');
 
                   return (
-                    <tr key={sheet._id} className="hover:bg-gray-50">
-                      <td className="border border-gray-300 px-4 py-2 font-medium">{sheet.pdsId}</td>
-                      <td className="border border-gray-300 px-4 py-2">{fullName}</td>
-                      <td className="border border-gray-300 px-4 py-2">{sheet.email}</td>
-                      <td className="border border-gray-300 px-4 py-2">{sheet.mobile}</td>
-                      <td className="border border-gray-300 px-4 py-2">
+                    <tr key={sheet._id} className="hover:bg-blue-50/50">
+                      <td className="border border-blue-100 px-3 py-1.5 font-medium">{sheet.pdsId}</td>
+                      <td className="border border-blue-100 px-3 py-1.5">{fullName}</td>
+                      <td className="border border-blue-100 px-3 py-1.5">{sheet.email}</td>
+                      <td className="border border-blue-100 px-3 py-1.5">{sheet.mobile}</td>
+                      <td className="border border-blue-100 px-3 py-1.5">
                         <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
                             sheet.status === 'Approved'
                               ? 'bg-green-100 text-green-700'
                               : sheet.status === 'Disapproved'
@@ -261,11 +288,11 @@ export default function ReviewPersonalDataSheets() {
                           {sheet.status || 'Pending'}
                         </span>
                       </td>
-                      <td className="border border-gray-300 px-4 py-2 text-sm">{new Date(sheet.createdAt).toLocaleDateString()}</td>
-                      <td className="border border-gray-300 px-4 py-2 text-center space-x-2">
-                        <button onClick={() => setSelectedSheet(sheet)} className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">View</button>
+                      <td className="border border-blue-100 px-3 py-1.5 text-sm">{new Date(sheet.createdAt).toLocaleDateString()}</td>
+                      <td className="border border-blue-100 px-3 py-1.5 text-center space-x-2">
+                        <button onClick={() => setSelectedSheet(sheet)} className="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 transition text-xs font-semibold">View</button>
                         
-                        <button onClick={() => handleDelete(sheet.pdsId)} disabled={actioningId === `${sheet.pdsId}-Delete`} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition disabled:opacity-50">{actioningId === `${sheet.pdsId}-Delete` ? 'Deleting...' : 'Delete'}</button>
+                        <button onClick={() => handleDelete(sheet.pdsId)} disabled={actioningId === `${sheet.pdsId}-Delete`} className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 transition disabled:opacity-50 text-xs font-semibold">{actioningId === `${sheet.pdsId}-Delete` ? 'Deleting...' : 'Delete'}</button>
                       </td>
                     </tr>
                   );
@@ -277,10 +304,10 @@ export default function ReviewPersonalDataSheets() {
       })()}
 
       {selectedSheet && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">PDS Details - {selectedSheet.pdsId}</h2>
+              <h2 className="text-2xl font-bold text-blue-950">PDS Details - {selectedSheet.pdsId}</h2>
               <button
                 onClick={() => {
                   setSelectedSheet(null);
@@ -295,6 +322,13 @@ export default function ReviewPersonalDataSheets() {
             <div className="space-y-6 text-sm">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">Personal Information</h3>
+                {selectedSheet.photoDataUrl && (
+                  <img
+                    src={selectedSheet.photoDataUrl}
+                    alt={`${selectedSheet.firstName || 'PDS'} photo`}
+                    className="mb-3 h-40 w-32 object-cover border border-gray-300"
+                  />
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <p><span className="font-semibold">Name:</span> {[selectedSheet.surname, selectedSheet.firstName, selectedSheet.middleName, selectedSheet.nameExtension].filter(Boolean).join(', ') || 'N/A'}</p>
                   <p><span className="font-semibold">Email:</span> {selectedSheet.email || 'N/A'}</p>
@@ -305,10 +339,42 @@ export default function ReviewPersonalDataSheets() {
                   <p><span className="font-semibold">Sex:</span> {selectedSheet.sexAtBirth || 'N/A'}</p>
                   <p><span className="font-semibold">Civil Status:</span> {selectedSheet.civilStatus || 'N/A'}</p>
                   <p><span className="font-semibold">Citizenship:</span> {formatCitizenship(selectedSheet.citizenship)}</p>
+                  <p><span className="font-semibold">Height (m):</span> {selectedSheet.height || 'N/A'}</p>
+                  <p><span className="font-semibold">Weight (kg):</span> {selectedSheet.weight || 'N/A'}</p>
+                  <p><span className="font-semibold">Blood Type:</span> {selectedSheet.bloodType || 'N/A'}</p>
+                  <p><span className="font-semibold">UMID ID No.:</span> {selectedSheet.gsisNo || 'N/A'}</p>
+                  <p><span className="font-semibold">PAG-IBIG ID No.:</span> {selectedSheet.pagibigNo || 'N/A'}</p>
+                  <p><span className="font-semibold">PhilHealth No.:</span> {selectedSheet.philhealthNo || 'N/A'}</p>
+                  <p><span className="font-semibold">PhilSys Number (PSN):</span> {selectedSheet.sssNo || 'N/A'}</p>
+                  <p><span className="font-semibold">TIN No.:</span> {selectedSheet.tinNo || 'N/A'}</p>
+                  <p><span className="font-semibold">Agency Employee No.:</span> {selectedSheet.agencyEmployeeNo || 'N/A'}</p>
                   <p><span className="font-semibold">Residential Address:</span> {formatAddress(selectedSheet.residentialAddress)}</p>
                   <p><span className="font-semibold">Permanent Address:</span> {formatAddress(selectedSheet.permanentAddress)}</p>
                 </div>
               </div>
+
+              {selectedSheet.jobApplication?.postingId && (
+                <div className="border-t border-blue-100 pt-4">
+                  <h3 className="mb-2 text-lg font-semibold text-gray-800">Job Portal Application</h3>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <p><span className="font-semibold">Application Status:</span> {selectedSheet.jobApplication.status || 'Pending'}</p>
+                    <p><span className="font-semibold">Position Title:</span> {selectedSheet.jobApplication.positionTitle || 'N/A'}</p>
+                    <p><span className="font-semibold">Place of Assignment:</span> {selectedSheet.jobApplication.placeOfAssignment || 'N/A'}</p>
+                    <p><span className="font-semibold">Plantilla Item Number:</span> {selectedSheet.jobApplication.plantillaItemNumber || 'N/A'}</p>
+                    <p><span className="font-semibold">Salary / Job / Pay Grade:</span> {selectedSheet.jobApplication.salaryJobPayGrade || 'N/A'}</p>
+                    <p><span className="font-semibold">Monthly Salary:</span> {selectedSheet.jobApplication.monthlySalary || 'N/A'}</p>
+                    <p><span className="font-semibold">Eligibility:</span> {Array.isArray(selectedSheet.jobApplication.eligibility) ? selectedSheet.jobApplication.eligibility.join(', ') : (selectedSheet.jobApplication.eligibility || 'N/A')}</p>
+                    <p><span className="font-semibold">Education:</span> {selectedSheet.jobApplication.education || 'N/A'}</p>
+                    <p><span className="font-semibold">Training:</span> {selectedSheet.jobApplication.training || 'N/A'}</p>
+                    <p><span className="font-semibold">Work Experience:</span> {selectedSheet.jobApplication.workExperience || 'N/A'}</p>
+                    <p><span className="font-semibold">Competency:</span> {selectedSheet.jobApplication.competency || 'N/A'}</p>
+                    <p><span className="font-semibold">Applicant Eligibility:</span> {selectedSheet.jobApplication.applicantQualifications?.eligibility || 'N/A'}</p>
+                    <p><span className="font-semibold">Applicant Education:</span> {selectedSheet.jobApplication.applicantQualifications?.education || 'N/A'}</p>
+                    <p><span className="font-semibold">Applicant Training:</span> {selectedSheet.jobApplication.applicantQualifications?.trainingChoice || 'N/A'}{selectedSheet.jobApplication.applicantQualifications?.trainingOther ? ` — ${selectedSheet.jobApplication.applicantQualifications.trainingOther}` : ''}</p>
+                    <p><span className="font-semibold">Applicant Work Experience:</span> {selectedSheet.jobApplication.applicantQualifications?.workExperienceChoice || 'N/A'}{selectedSheet.jobApplication.applicantQualifications?.workExperienceOther ? ` — ${selectedSheet.jobApplication.applicantQualifications.workExperienceOther}` : ''}</p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-2">Family Background</h3>
@@ -380,6 +446,9 @@ export default function ReviewPersonalDataSheets() {
                     {selectedSheet.workExperience.map((w, i) => (
                       <li key={`work-${i}`}>
                         {w.positionTitle || 'N/A'} at {w.company || 'N/A'} ({w.from || 'N/A'} - {w.to || 'N/A'}) {w.duties ? `- ${w.duties}` : ''}
+                        <div className="text-sm text-gray-600">
+                          Monthly Salary: {w.monthlySalary || 'N/A'} · Salary / Job / Pay Grade &amp; Step: {w.salaryJobPayGrade || 'N/A'}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -461,38 +530,49 @@ export default function ReviewPersonalDataSheets() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEditPds(selectedSheet)}
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition text-sm font-semibold"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleReview(selectedSheet.pdsId, 'Approved')}
                     disabled={selectedSheet.status === 'Approved' || actioningId === `${selectedSheet.pdsId}-Approved`}
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 transition disabled:opacity-50"
+                    className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition disabled:opacity-50 text-sm font-semibold"
                   >
                     {actioningId === `${selectedSheet.pdsId}-Approved` ? 'Approving...' : 'Approve'}
                   </button>
                   <button
                     onClick={() => handleReview(selectedSheet.pdsId, 'Disapproved', 'Disapproved by admin during review.')}
                     disabled={selectedSheet.status === 'Disapproved' || actioningId === `${selectedSheet.pdsId}-Disapproved`}
-                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition disabled:opacity-50"
+                    className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition disabled:opacity-50 text-sm font-semibold"
                   >
                     {actioningId === `${selectedSheet.pdsId}-Disapproved` ? 'Disapproving...' : 'Disapprove'}
                   </button>
                   <button
                     onClick={() => openRevisionModal(selectedSheet)}
                     disabled={selectedSheet.status === 'For Revision' || actioningId === `${selectedSheet.pdsId}-For Revision`}
-                    className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition disabled:opacity-50"
+                    className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition disabled:opacity-50 text-sm font-semibold"
                   >
                     {actioningId === `${selectedSheet.pdsId}-For Revision` ? 'Sending...' : 'Revision'}
                   </button>
+                  {normalizeStatus(selectedSheet.status) === 'approved' && (
+                    <button
+                      onClick={() => handleSetUpdatePermission(selectedSheet, !Boolean(selectedSheet.updatePermissionGranted))}
+                      disabled={permissionActioningId === selectedSheet.pdsId}
+                      className={`text-white px-4 py-2 rounded-md transition disabled:opacity-50 text-sm font-semibold ${selectedSheet.updatePermissionGranted ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                    >
+                      {permissionActioningId === selectedSheet.pdsId
+                        ? 'Saving...'
+                        : (selectedSheet.updatePermissionGranted ? 'Revoke Update Permission' : 'Allow User to Update')}
+                    </button>
+                  )}
                 </div>
               <button
                 onClick={() => {
                   setSelectedSheet(null);
                   closeRevisionModal();
                 }}
-                className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 transition"
+                className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 transition text-sm font-semibold"
               >
                 Close
               </button>
@@ -502,10 +582,10 @@ export default function ReviewPersonalDataSheets() {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-xl p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-3">Revision Remarks</h3>
-            <p className="text-sm text-gray-600 mb-3">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-xl p-6">
+            <h3 className="text-xl font-bold text-blue-950 mb-3">Revision Remarks</h3>
+            <p className="text-sm text-blue-700/80 mb-3">
               Add remarks for this PDS so the staff knows what to update before resubmitting.
             </p>
 
@@ -513,7 +593,7 @@ export default function ReviewPersonalDataSheets() {
               value={revisionRemarks}
               onChange={(e) => setRevisionRemarks(e.target.value)}
               rows={6}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="w-full border border-blue-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-300"
               placeholder="Enter revision remarks..."
             />
 
@@ -521,7 +601,7 @@ export default function ReviewPersonalDataSheets() {
               <button
                 type="button"
                 onClick={closeRevisionModal}
-                className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition"
+                className="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 transition text-sm font-semibold"
               >
                 Cancel
               </button>
@@ -529,7 +609,7 @@ export default function ReviewPersonalDataSheets() {
                 type="button"
                 onClick={submitRevision}
                 disabled={!revisionTargetPdsId || actioningId === `${revisionTargetPdsId}-For Revision`}
-                className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition disabled:opacity-50"
+                className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition disabled:opacity-50 text-sm font-semibold"
               >
                 {actioningId === `${revisionTargetPdsId}-For Revision` ? 'Sending...' : 'Send for Revision'}
               </button>

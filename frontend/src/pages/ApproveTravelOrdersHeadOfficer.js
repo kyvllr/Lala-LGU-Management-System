@@ -174,7 +174,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
     }
   };
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
   const filteredOrders = travelOrders.filter((order) => {
     const query = searchValue.toLowerCase();
@@ -187,16 +187,16 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
 
   return (
     <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-2">Approve Travel Orders</h1>
-      <p className="text-gray-600 mb-6 text-sm">Head Officer Approval Level - First stage of approval</p>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Approve Travel Orders</h1>
+      <p className="text-blue-700/80 mb-6 text-sm">Head Officer Approval Level - First stage of approval</p>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Requests List */}
         <div className="lg:col-span-1">
           {/* Search Bar */}
-          <div className="mb-4">
+          <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
@@ -204,7 +204,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                 placeholder="Search by staff name, control number..."
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               />
             </div>
           </div>
@@ -214,20 +214,20 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
               <div
                 key={order.travelOrderId}
                 onClick={() => setSelectedOrder(order)}
-                className={`bg-white p-4 rounded shadow cursor-pointer transition ${
-                  selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-600' : ''
+                className={`bg-white p-4 rounded-lg border border-blue-100 shadow-sm cursor-pointer transition ${
+                  selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-500' : ''
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold">{order.staffName}</h3>
-                    <p className="text-gray-600 text-sm">{order.travelOrderId || 'N/A'}</p>
-                    <p className="text-gray-600 text-sm">
+                    <h3 className="font-semibold text-blue-950">{order.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm">{order.travelOrderId || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-sm">
                       {formatDate(order.dateFrom || order.periodCoveredFrom)} - {formatDate(order.dateTo || order.periodCoveredTo)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm block">
+                    <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-semibold block">
                       Pending
                     </span>
                   </div>
@@ -245,45 +245,56 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
 
         {/* Approval Panel */}
         {selectedOrder && (
-          <div className="bg-white p-6 rounded shadow lg:col-span-1">
-            <h2 className="text-xl font-bold mb-4">Travel Order Details</h2>
+          <div className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm lg:col-span-1">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Travel Order Details</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <div>
-                <p className="text-gray-600 text-sm">Staff</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Staff</p>
                 <p className="font-bold">{selectedOrder.staffName}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Travel Type</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Travel Type</p>
                 <p className="font-bold">{selectedOrder.travelType === 'abroad' || selectedOrder.controlNo ? 'Travel Abroad' : 'Travel Order / Office Order'}</p>
               </div>
               {(selectedOrder.travelType === 'abroad' || selectedOrder.controlNo) ? (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Date Prepared</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date Prepared</p>
                     <p className="font-bold">{formatDate(selectedOrder.datePrepared)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Control Number</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Control Number</p>
                     <p className="font-bold">{selectedOrder.controlNo || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period</p>
                     <p className="font-bold">{selectedOrder.period || `${formatDate(selectedOrder.dateFrom)} - ${formatDate(selectedOrder.dateTo)}`}</p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Purpose of Travel</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Purpose of Travel</p>
                     <p className="font-bold">{selectedOrder.purposeOfTravel || selectedOrder.purpose || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period Covered</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period Covered</p>
                     <p className="font-bold">{formatDate(selectedOrder.periodCoveredFrom || selectedOrder.dateFrom)} - {formatDate(selectedOrder.periodCoveredTo || selectedOrder.dateTo)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Venue/Destination</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Please Check</p>
+                    <p className="font-bold">{[
+                      selectedOrder.officialBusiness ? 'Official Business' : null,
+                      selectedOrder.officialTime ? 'Official Time' : null,
+                      selectedOrder.meeting ? 'Meeting' : null,
+                      selectedOrder.travel ? 'Travel' : null,
+                      selectedOrder.training ? 'Training' : null,
+                      selectedOrder.seminar ? 'Seminar' : null,
+                    ].filter(Boolean).join(', ') || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Venue/Destination</p>
                     <p className="font-bold">{selectedOrder.venueDestination || selectedOrder.destination || 'N/A'}</p>
                   </div>
                 </>
@@ -297,7 +308,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 ></textarea>
               </div>
 
@@ -305,7 +316,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded text-white font-bold bg-green-600 hover:bg-green-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve & Forward to Admin
                 </button>
@@ -315,7 +326,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-red-600 hover:bg-red-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -325,7 +336,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded text-white font-bold bg-amber-600 hover:bg-amber-700"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Request Revision
                 </button>
@@ -336,29 +347,29 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
               onChange={(e) => setDisapproveComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Reason for disapproval"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowDisapproveModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDisapprove}
-                className="px-4 py-2 rounded bg-red-600 text-white"
+                className="px-4 py-2 rounded-md bg-red-500 text-white text-sm font-semibold"
               >
                 Confirm Disapprove
               </button>
@@ -368,29 +379,29 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Request Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}
               onChange={(e) => setRevisionComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Required revisions"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowRevisionModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleApproveWithRevision}
-                className="px-4 py-2 rounded bg-amber-600 text-white"
+                className="px-4 py-2 rounded-md bg-orange-500 text-white text-sm font-semibold"
               >
                 Send for Revision
               </button>

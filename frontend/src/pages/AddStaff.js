@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { staffAPI, systemAPI } from '../api';
+import calculateLengthOfService from '../utils/calculateLengthOfService';
 
 const ALLOWED_ROLE_DISPLAY_NAMES = [
   'Super Admin/Mayor',
@@ -42,8 +43,22 @@ function AddStaff() {
     department: '',
     phone: '',
     dateOfBirth: '',
+    dateHired: '',
     placeOfBirth: '',
     tinNumber: '',
+    businessPartnerNumber: '',
+    philhealthNo: '',
+    pagibigNo: '',
+    maritalStatus: '',
+    address: '',
+    employmentStatus: '',
+    lengthOfService: '',
+    monthlyBasicSalary: '',
+    peraRata: '',
+    grossSalary: '',
+    pendingAdministrativeCase: '',
+    pendingCriminalCase: '',
+    salaryGrade: '',
   });
   const [rolesAndDepartments, setRolesAndDepartments] = useState(null);
   const [error, setError] = useState('');
@@ -87,6 +102,7 @@ function AddStaff() {
       setFormData({
         ...formData,
         [name]: value,
+        ...(name === 'dateHired' ? { lengthOfService: calculateLengthOfService(value) } : {}),
       });
     }
   };
@@ -128,8 +144,22 @@ function AddStaff() {
         department: '',
         phone: '',
         dateOfBirth: '',
+        dateHired: '',
         placeOfBirth: '',
         tinNumber: '',
+        businessPartnerNumber: '',
+        philhealthNo: '',
+        pagibigNo: '',
+        maritalStatus: '',
+        address: '',
+        employmentStatus: '',
+        lengthOfService: '',
+        monthlyBasicSalary: '',
+        peraRata: '',
+        grossSalary: '',
+        pendingAdministrativeCase: '',
+        pendingCriminalCase: '',
+        salaryGrade: '',
       });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to add staff');
@@ -147,7 +177,7 @@ function AddStaff() {
 
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
         <div>
-          <label className="block font-bold mb-2">Staff ID *</label>
+          <label className="block font-bold mb-2">Item Number *</label>
           <input
             type="text"
             name="id"
@@ -298,6 +328,17 @@ function AddStaff() {
         </div>
 
         <div>
+          <label className="block font-bold mb-2">DOE (Date of Employment)</label>
+          <input
+            type="date"
+            name="dateHired"
+            value={formData.dateHired}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
           <label className="block font-bold mb-2">Place of Birth</label>
           <input
             type="text"
@@ -314,6 +355,166 @@ function AddStaff() {
             type="text"
             name="tinNumber"
             value={formData.tinNumber}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Business Partner Number</label>
+          <input
+            type="text"
+            name="businessPartnerNumber"
+            value={formData.businessPartnerNumber}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">PhilHealth Number</label>
+          <input
+            type="text"
+            name="philhealthNo"
+            value={formData.philhealthNo}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Pag-IBIG Number</label>
+          <input
+            type="text"
+            name="pagibigNo"
+            value={formData.pagibigNo}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Marital Status</label>
+          <select
+            name="maritalStatus"
+            value={formData.maritalStatus}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Select marital status</option>
+            <option value="Single">Single</option>
+            <option value="Married">Married</option>
+            <option value="Widowed">Widowed</option>
+            <option value="Separated">Separated</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Address</label>
+          <input
+            type="text"
+            name="address"
+            value={formData.address}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Status of Employment</label>
+          <input
+            type="text"
+            name="employmentStatus"
+            value={formData.employmentStatus}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Length of Service</label>
+          <input
+            type="text"
+            name="lengthOfService"
+            value={formData.lengthOfService}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+            readOnly
+            placeholder="Calculated from Date of Employment"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Monthly Basic Salary</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            name="monthlyBasicSalary"
+            value={formData.monthlyBasicSalary}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">PERA/RATA</label>
+          <input
+            type="text"
+            name="peraRata"
+            value={formData.peraRata}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Gross Salary</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            name="grossSalary"
+            value={formData.grossSalary}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Pending Administrative Case</label>
+          <select
+            name="pendingAdministrativeCase"
+            value={formData.pendingAdministrativeCase}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Not specified</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Pending Criminal Case</label>
+          <select
+            name="pendingCriminalCase"
+            value={formData.pendingCriminalCase}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Not specified</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block font-bold mb-2">Salary Grade</label>
+          <input
+            type="text"
+            name="salaryGrade"
+            value={formData.salaryGrade}
             onChange={handleChange}
             className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
           />

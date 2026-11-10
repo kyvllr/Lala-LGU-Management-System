@@ -3,9 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import MyTravelOrders from './MyTravelOrders';
 import FileTravelOrder from './FileTravelOrder';
 
-function TravelOrderHub({ staffId }) {
+function TravelOrderHub({ staffId, initialTab = 'my' }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') === 'request' ? 'request' : 'my';
+  const requestedTab = searchParams.get('tab');
+  const activeTab = requestedTab === 'request' || requestedTab === 'my'
+    ? requestedTab
+    : initialTab;
   const status = searchParams.get('status') || '';
 
   const statusTabs = [
@@ -37,22 +40,22 @@ function TravelOrderHub({ staffId }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow p-4">
-        <h1 className="text-2xl font-bold text-gray-800">Travel Order</h1>
-        <p className="text-sm text-gray-600">Manage your travel requests and tracking in one place.</p>
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-4">
+        <h1 className="text-2xl font-bold tracking-tight text-blue-950">Travel Order</h1>
+        <p className="text-sm text-blue-700/80">Manage your travel requests and tracking in one place.</p>
 
-        <div className="mt-4 flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+        <div className="mt-4 flex flex-wrap gap-2 border-b border-blue-100 pb-2">
           <button
             type="button"
             onClick={() => setTab('my')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             My Travel Orders
           </button>
           <button
             type="button"
             onClick={() => setTab('request')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === 'request' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'request' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             Request Travel
           </button>
@@ -65,7 +68,7 @@ function TravelOrderHub({ staffId }) {
                 key={item.label}
                 type="button"
                 onClick={() => setStatus(item.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${status === item.key ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-transparent hover:bg-gray-200'}`}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${status === item.key ? 'bg-blue-500 text-white border border-blue-500' : 'bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100'}`}
               >
                 {item.label}
               </button>

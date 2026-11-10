@@ -3,11 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { personalDataSheetAPI } from '../api';
 import ReviewPersonalDataSheets from './ReviewPersonalDataSheets';
 import PDSRecordTab from './PDSRecordTab';
-import { isAdmin, normalizeRole } from '../constants';
+import { isDepartmentStaffManager, normalizeRole } from '../constants';
 
 export default function PDSHub() {
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const canViewPdsRequests = isAdmin(normalizeRole(storedUser?.role));
+  const canViewPdsRequests = isDepartmentStaffManager(normalizeRole(storedUser?.role));
   const [activeTab, setActiveTab] = useState('my');
   const [myPds, setMyPds] = useState({
     latestSubmission: null,
@@ -18,17 +18,66 @@ export default function PDSHub() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const normalizeText = (value) => String(value || '').trim().toLowerCase();
+  const hasActiveUpdatePermission = (record) => {
+    if (!record?.updatePermissionGranted) return false;
+    if (!record?.updatePermissionExpiresAt) return true;
+
+    const expiresAt = new Date(record.updatePermissionExpiresAt);
+    if (Number.isNaN(expiresAt.getTime())) return false;
+    return expiresAt.getTime() > Date.now();
+  };
+  const normalizedLatestStatus = normalizeText(myPds.latestSubmission?.status);
+  const hasKnownLatestStatus = ['pending', 'for revision', 'disapproved', 'approved'].includes(normalizedLatestStatus);
+  const hasApprovedPds = Boolean(myPds.approvedPds);
+  const hasPdsRecord = Boolean(myPds.approvedPds || myPds.latestSubmission);
+  const approvedUpdateAllowed = hasApprovedPds ? hasActiveUpdatePermission(myPds.approvedPds) : true;
+  const canOpenPdsForm = !hasApprovedPds || approvedUpdateAllowed;
+  const openPdsFormState = hasApprovedPds && approvedUpdateAllowed && myPds.approvedPds?.pdsId
+    ? {
+        prefill: true,
+        userEdit: true,
+        pdsId: myPds.approvedPds.pdsId,
+        editPds: myPds.approvedPds,
+      }
+    : (hasPdsRecord ? { prefill: true } : undefined);
+
+  const isOwnedMyPdsRecord = (record) => {
+    if (!record) return false;
+
+    const currentEmail = normalizeText(storedUser?.email);
+    const ownerEmail = normalizeText(record.ownerEmail);
+    const subjectEmail = normalizeText(record.email);
+
+    return (
+      (Boolean(currentEmail) && ownerEmail === currentEmail) ||
+      (Boolean(currentEmail) && subjectEmail === currentEmail)
+    );
+  };
+
   const loadMyPds = async () => {
     try {
       setLoading(true);
       setError('');
       const res = await personalDataSheetAPI.getMy();
+      const latestSubmission = res.data?.latestSubmission || null;
+      const approvedPds = res.data?.approvedPds || null;
+
+      const ownedLatestSubmission = isOwnedMyPdsRecord(latestSubmission) ? latestSubmission : null;
+      const ownedApprovedPds = isOwnedMyPdsRecord(approvedPds) ? approvedPds : null;
+      const normalizedLatestSubmissionStatus = normalizeText(ownedLatestSubmission?.status);
+
       setMyPds({
-        latestSubmission: res.data?.latestSubmission || null,
-        approvedPds: res.data?.approvedPds || null,
+        latestSubmission: ownedLatestSubmission,
+        approvedPds: ownedApprovedPds || (normalizedLatestSubmissionStatus === 'approved' ? ownedLatestSubmission : null),
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load your PDS information right now.');
+      const isNetworkError = err.code === 'ERR_NETWORK' || !err.response;
+      setError(
+        isNetworkError
+          ? 'Cannot connect to the server right now. Please make sure the backend is running.'
+          : (err.response?.data?.message || 'Unable to load your PDS information right now.')
+      );
       setMyPds({ latestSubmission: null, approvedPds: null });
     } finally {
       setLoading(false);
@@ -136,6 +185,22 @@ export default function PDSHub() {
 
       {activeTab === 'my' && (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
+          {!loading && !error && hasPdsRecord && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canOpenPdsForm) return;
+                  navigate('/submit-personal-data-sheet', openPdsFormState ? { state: openPdsFormState } : undefined);
+                }}
+                disabled={!canOpenPdsForm}
+                className="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {canOpenPdsForm ? 'Update PDS' : 'Update Locked'}
+              </button>
+            </div>
+          )}
+
           {loading && <p className="text-gray-600">Loading your PDS details...</p>}
 
           {!loading && error && (
@@ -168,6 +233,13 @@ export default function PDSHub() {
             </div>
           )}
 
+          {!loading && !error && !myPds.approvedPds && myPds.latestSubmission && !hasKnownLatestStatus && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700 space-y-2">
+              <p>Your latest PDS status is: <span className="font-semibold">{myPds.latestSubmission?.status || 'Unknown'}</span>.</p>
+              <p>Your submission is on record. If this status persists, please contact Admin/HR to review it.</p>
+            </div>
+          )}
+
           {!loading && !error && !myPds.approvedPds && !myPds.latestSubmission && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-700">
               You have not submitted a Personal Data Sheet yet.
@@ -179,6 +251,12 @@ export default function PDSHub() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-700">
                 Approved by {myPds.approvedPds.reviewedBy || 'Admin'} on {myPds.approvedPds.reviewedAt ? new Date(myPds.approvedPds.reviewedAt).toLocaleDateString() : 'N/A'}.
               </div>
+
+              {!approvedUpdateAllowed && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800">
+                  Your approved PDS is locked for updates. Please ask Admin/HR to open your record and allow update permission.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
@@ -214,6 +292,13 @@ export default function PDSHub() {
               <div className="pt-2 border-t border-gray-200 space-y-6 text-sm text-gray-800">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 mb-2">Personal Information</h3>
+                  {myPds.approvedPds.photoDataUrl && (
+                    <img
+                      src={myPds.approvedPds.photoDataUrl}
+                      alt={`${myPds.approvedPds.firstName || 'PDS'} photo`}
+                      className="mb-3 h-40 w-32 object-cover border border-gray-300"
+                    />
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <p><span className="font-semibold">Name:</span> {formatName([myPds.approvedPds.surname, myPds.approvedPds.firstName, myPds.approvedPds.middleName, myPds.approvedPds.nameExtension])}</p>
                     <p><span className="font-semibold">Email:</span> {myPds.approvedPds.email || 'N/A'}</p>
@@ -224,6 +309,15 @@ export default function PDSHub() {
                     <p><span className="font-semibold">Sex:</span> {myPds.approvedPds.sexAtBirth || 'N/A'}</p>
                     <p><span className="font-semibold">Civil Status:</span> {myPds.approvedPds.civilStatus || 'N/A'}</p>
                     <p><span className="font-semibold">Citizenship:</span> {myPds.approvedPds.citizenship?.type || 'N/A'}</p>
+                    <p><span className="font-semibold">Height (m):</span> {myPds.approvedPds.height || 'N/A'}</p>
+                    <p><span className="font-semibold">Weight (kg):</span> {myPds.approvedPds.weight || 'N/A'}</p>
+                    <p><span className="font-semibold">Blood Type:</span> {myPds.approvedPds.bloodType || 'N/A'}</p>
+                    <p><span className="font-semibold">UMID ID No.:</span> {myPds.approvedPds.gsisNo || 'N/A'}</p>
+                    <p><span className="font-semibold">PAG-IBIG ID No.:</span> {myPds.approvedPds.pagibigNo || 'N/A'}</p>
+                    <p><span className="font-semibold">PhilHealth No.:</span> {myPds.approvedPds.philhealthNo || 'N/A'}</p>
+                    <p><span className="font-semibold">PhilSys Number (PSN):</span> {myPds.approvedPds.sssNo || 'N/A'}</p>
+                    <p><span className="font-semibold">TIN No.:</span> {myPds.approvedPds.tinNo || 'N/A'}</p>
+                    <p><span className="font-semibold">Agency Employee No.:</span> {myPds.approvedPds.agencyEmployeeNo || 'N/A'}</p>
                     <p><span className="font-semibold">Residential Address:</span> {formatAddress(myPds.approvedPds.residentialAddress)}</p>
                     <p><span className="font-semibold">Permanent Address:</span> {formatAddress(myPds.approvedPds.permanentAddress)}</p>
                   </div>
@@ -388,10 +482,22 @@ export default function PDSHub() {
         <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
           <h2 className="text-xl font-bold text-gray-800">Submit PDS</h2>
           <p className="text-gray-600">Open the Personal Data Sheet form and submit your latest details for admin review.</p>
+          {hasApprovedPds && !approvedUpdateAllowed && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-yellow-800 text-sm">
+              Your approved PDS is currently locked. Admin/HR must grant update permission before you can submit changes.
+            </div>
+          )}
           <button
             type="button"
-            onClick={() => navigate('/submit-personal-data-sheet', { state: { prefill: true } })}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+            onClick={() => {
+              if (!canOpenPdsForm) return;
+              navigate(
+                '/submit-personal-data-sheet',
+                openPdsFormState ? { state: openPdsFormState } : undefined
+              );
+            }}
+            disabled={!canOpenPdsForm}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Open Submit PDS Form
           </button>

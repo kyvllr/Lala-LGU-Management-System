@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api, { systemAPI } from '../api';
+import calculateLengthOfService from '../utils/calculateLengthOfService';
 
 const RESTRICTED_REGISTRATION_ROLE_DISPLAY_NAMES = [
   'Super Admin/Mayor',
@@ -21,8 +22,22 @@ export default function Register() {
     department: '',
     phone: '',
     dateOfBirth: '',
+    dateHired: '',
     placeOfBirth: '',
     tinNumber: '',
+    businessPartnerNumber: '',
+    philhealthNo: '',
+    pagibigNo: '',
+    maritalStatus: '',
+    address: '',
+    employmentStatus: '',
+    lengthOfService: '',
+    monthlyBasicSalary: '',
+    peraRata: '',
+    grossSalary: '',
+    pendingAdministrativeCase: '',
+    pendingCriminalCase: '',
+    salaryGrade: '',
   });
   const [rolesAndDepartments, setRolesAndDepartments] = useState(null);
   const [error, setError] = useState('');
@@ -60,6 +75,7 @@ export default function Register() {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === 'dateHired' ? { lengthOfService: calculateLengthOfService(value) } : {}),
     }));
   };
 
@@ -107,8 +123,22 @@ export default function Register() {
         department: formData.department,
         phone: formData.phone,
         dateOfBirth: formData.dateOfBirth,
+        dateHired: formData.dateHired,
         placeOfBirth: formData.placeOfBirth,
         tinNumber: formData.tinNumber,
+        businessPartnerNumber: formData.businessPartnerNumber,
+        philhealthNo: formData.philhealthNo,
+        pagibigNo: formData.pagibigNo,
+        maritalStatus: formData.maritalStatus,
+        address: formData.address,
+        employmentStatus: formData.employmentStatus,
+        lengthOfService: formData.lengthOfService,
+        monthlyBasicSalary: formData.monthlyBasicSalary,
+        peraRata: formData.peraRata,
+        grossSalary: formData.grossSalary,
+        pendingAdministrativeCase: formData.pendingAdministrativeCase,
+        pendingCriminalCase: formData.pendingCriminalCase,
+        salaryGrade: formData.salaryGrade,
       });
 
       setSuccess('Registration submitted successfully! Please wait for admin approval to login.');
@@ -180,7 +210,7 @@ export default function Register() {
           </div>
 
           <p className="text-gray-600 text-xs mt-6">
-            Staff ID: <span className="font-semibold">{formData.staffId}</span>
+            Item Number: <span className="font-semibold">{formData.staffId}</span>
           </p>
         </div>
       </div>
@@ -189,7 +219,7 @@ export default function Register() {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center p-4 py-8 relative overflow-hidden"
+      className="min-h-screen flex items-center justify-center p-4 py-8 relative"
       style={{
         backgroundImage: `linear-gradient(rgba(138, 219, 246, 0.48), rgba(255, 255, 255, 0.2)), url('/login.jpg')`,
         backgroundSize: 'cover',
@@ -197,7 +227,7 @@ export default function Register() {
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative" style={{ opacity: 0.95 }}>
+      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl relative" style={{ opacity: 0.95 }}>
         <div className="text-center mb-8">
           <img 
             src="/logo.PNG" 
@@ -220,10 +250,13 @@ export default function Register() {
           </div>
         )}
 
-        <form onSubmit={handleRegister} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleRegister} className="space-y-6">
+          <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-5">
+            <h2 className="text-lg font-semibold text-blue-900 mb-4">Personal Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Staff ID *
+              Item Number *
             </label>
             <input
               type="text"
@@ -302,76 +335,6 @@ export default function Register() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Role *
-            </label>
-            {rolesAndDepartments ? (
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-                required
-              >
-                <option value="">Select Role</option>
-                {Object.entries(rolesAndDepartments.roles)
-                  .filter(([, roleData]) => !RESTRICTED_REGISTRATION_ROLE_DISPLAY_NAMES.includes(roleData.displayName))
-                  .map(([roleKey, roleData]) => (
-                  <option key={roleKey} value={roleKey}>
-                    {roleData.displayName}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                disabled
-                value="Loading roles..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
-              />
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Position
-            </label>
-            <input
-              type="text"
-              name="position"
-              value={formData.position}
-              onChange={handleChange}
-              placeholder="e.g., Administrative Officer"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-          </div>
-
-          {rolesAndDepartments?.roles?.[formData.role]?.requiresDepartment && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Department *
-              </label>
-              <select
-                name="department"
-                value={formData.department}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading}
-                required
-              >
-                <option value="">Select Department</option>
-                {rolesAndDepartments.departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
               Phone Number
             </label>
             <input
@@ -430,6 +393,264 @@ export default function Register() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Business Partner Number</label>
+            <input
+              type="text"
+              name="businessPartnerNumber"
+              value={formData.businessPartnerNumber}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">PhilHealth Number</label>
+            <input
+              type="text"
+              name="philhealthNo"
+              value={formData.philhealthNo}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG Number</label>
+            <input
+              type="text"
+              name="pagibigNo"
+              value={formData.pagibigNo}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
+            <select
+              name="maritalStatus"
+              value={formData.maritalStatus}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            >
+              <option value="">Select marital status</option>
+              <option value="Single">Single</option>
+              <option value="Married">Married</option>
+              <option value="Widowed">Widowed</option>
+              <option value="Separated">Separated</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-5">
+            <h2 className="text-lg font-semibold text-blue-900 mb-4">Employment Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role *
+                </label>
+                {rolesAndDepartments ? (
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                    required
+                  >
+                    <option value="">Select Role</option>
+                    {Object.entries(rolesAndDepartments.roles)
+                      .filter(([, roleData]) => !RESTRICTED_REGISTRATION_ROLE_DISPLAY_NAMES.includes(roleData.displayName))
+                      .map(([roleKey, roleData]) => (
+                        <option key={roleKey} value={roleKey}>{roleData.displayName}</option>
+                      ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    disabled
+                    value="Loading roles..."
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                <input
+                  type="text"
+                  name="position"
+                  value={formData.position}
+                  onChange={handleChange}
+                  placeholder="e.g., Administrative Officer"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Employment</label>
+                <input
+                  type="date"
+                  name="dateHired"
+                  value={formData.dateHired}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+              </div>
+
+              {rolesAndDepartments?.roles?.[formData.role]?.requiresDepartment && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                  <select
+                    name="department"
+                    value={formData.department}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                    required
+                  >
+                    <option value="">Select Department</option>
+                    {rolesAndDepartments.departments.map((dept) => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status of Employment</label>
+            <input
+              type="text"
+              name="employmentStatus"
+              value={formData.employmentStatus}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Length of Service</label>
+            <input
+              type="text"
+              name="lengthOfService"
+              value={formData.lengthOfService}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly
+              placeholder="Calculated from Date of Employment"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Basic Salary</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              name="monthlyBasicSalary"
+              value={formData.monthlyBasicSalary}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">PERA/RATA</label>
+            <input
+              type="text"
+              name="peraRata"
+              value={formData.peraRata}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Gross Salary</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              name="grossSalary"
+              value={formData.grossSalary}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Pending Administrative Case</label>
+            <select
+              name="pendingAdministrativeCase"
+              value={formData.pendingAdministrativeCase}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            >
+              <option value="">Not specified</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Pending Criminal Case</label>
+            <select
+              name="pendingCriminalCase"
+              value={formData.pendingCriminalCase}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            >
+              <option value="">Not specified</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Salary Grade</label>
+            <input
+              type="text"
+              name="salaryGrade"
+              value={formData.salaryGrade}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+          </div>
+
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-5">
+            <h2 className="text-lg font-semibold text-blue-900 mb-4">Account Credentials</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password *
             </label>
@@ -464,10 +685,12 @@ export default function Register() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full md:col-span-2 bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full md:col-span-2 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             {loading ? 'Registering...' : 'Register'}
           </button>
+            </div>
+          </section>
         </form>
 
         <div className="mt-6 text-center">

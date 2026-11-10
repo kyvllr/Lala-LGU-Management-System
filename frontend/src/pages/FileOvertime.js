@@ -74,7 +74,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
         position: response.data.position || '',
       }));
     } catch (err) {
-      setError('Staff ID not found');
+      setError('Item Number not found');
     }
   };
 
@@ -355,17 +355,17 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">{pageTitle}</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-6">{pageTitle}</h1>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg border border-red-300">{error}</div>}
-      {success && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg border border-green-300">{success}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">{error}</div>}
+      {success && <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">{success}</div>}
 
       {showRequestSection && (
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-6 mb-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Staff Information Section */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Staff Information</h2>
+          <div className="border-b border-blue-100 pb-6">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Staff Information</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
@@ -374,7 +374,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="lastName"
                   value={formData.lastName}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                  className="w-full px-3 py-2 border border-blue-100 rounded-md bg-blue-50/70"
                 />
               </div>
               <div>
@@ -384,7 +384,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="firstName"
                   value={formData.firstName}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                  className="w-full px-3 py-2 border border-blue-100 rounded-md bg-blue-50/70"
                 />
               </div>
               <div>
@@ -394,7 +394,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="middleName"
                   value={formData.middleName}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                  className="w-full px-3 py-2 border border-blue-100 rounded-md bg-blue-50/70"
                 />
               </div>
               <div>
@@ -404,7 +404,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="office"
                   value={formData.office}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                  className="w-full px-3 py-2 border border-blue-100 rounded-md bg-blue-50/70"
                 />
               </div>
             </div>
@@ -415,14 +415,14 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                 name="position"
                 value={formData.position}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                className="w-full px-3 py-2 border border-blue-100 rounded-md bg-blue-50/70"
               />
             </div>
           </div>
 
           {/* Overtime Details Section */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Overtime Details</h2>
+          <div className="border-b border-blue-100 pb-6">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Overtime Details</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Date of Filing</label>
@@ -431,7 +431,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="filingDate"
                   value={formData.filingDate}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   required
                 />
               </div>
@@ -444,7 +444,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                 value={formData.purposeOfOvertime}
                 onChange={handleInputChange}
                 rows="4"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                 placeholder="Enter the purpose of overtime"
                 required
               />
@@ -458,7 +458,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="inclusiveDateStart"
                   value={formData.inclusiveDateStart}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   required
                 />
               </div>
@@ -469,7 +469,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                   name="inclusiveDateEnd"
                   value={formData.inclusiveDateEnd}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   required
                 />
               </div>
@@ -477,8 +477,8 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
           </div>
 
           {/* Approval Types Section */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Approval Required From</h2>
+          <div className="border-b border-blue-100 pb-6">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Approval Required From</h2>
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -504,48 +504,48 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
           </div>
 
           {/* Staff Details Table Section */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Staff Involved in Overtime</h2>
-            <div className="overflow-x-auto mb-4">
-              <table className="w-full border-collapse">
+          <div className="border-b border-blue-100 pb-6">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Staff Involved in Overtime</h2>
+            <div className="overflow-x-auto mb-4 rounded-lg border border-blue-100">
+              <table className="w-full border-collapse text-[13px] text-slate-700">
                 <thead>
-                  <tr className="bg-gray-200">
-                    <th className="border px-4 py-2 text-left font-bold">No.</th>
-                    <th className="border px-4 py-2 text-left font-bold">Name/s</th>
-                    <th className="border px-4 py-2 text-left font-bold">Position/Designation</th>
-                    <th className="border px-4 py-2 text-center font-bold">Action</th>
+                  <tr className="bg-blue-100/80 text-blue-900">
+                    <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">No.</th>
+                    <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Name/s</th>
+                    <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Position/Designation</th>
+                    <th className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {formData.staffDetails.map((detail, index) => (
-                    <tr key={index} className="border">
-                      <td className="border px-4 py-2 text-center">{index + 1}</td>
-                      <td className="border px-4 py-2">
+                    <tr key={index} className="border border-blue-100">
+                      <td className="border border-blue-100 px-3 py-1.5 text-center">{index + 1}</td>
+                      <td className="border border-blue-100 px-3 py-1.5">
                         <input
                           type="text"
                           value={detail.name}
                           onChange={(e) => handleStaffDetailsChange(index, 'name', e.target.value)}
                           placeholder="Full Name"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                           required
                         />
                       </td>
-                      <td className="border px-4 py-2">
+                      <td className="border border-blue-100 px-3 py-1.5">
                         <input
                           type="text"
                           value={detail.position}
                           onChange={(e) => handleStaffDetailsChange(index, 'position', e.target.value)}
                           placeholder="Position/Designation"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                           required
                         />
                       </td>
-                      <td className="border px-4 py-2 text-center">
+                      <td className="border border-blue-100 px-3 py-1.5 text-center">
                         <button
                           type="button"
                           onClick={() => removeStaffRow(index)}
                           disabled={formData.staffDetails.length === 1}
-                          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 transition"
+                          className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-300 transition text-xs font-semibold"
                         >
                           Remove
                         </button>
@@ -558,7 +558,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
             <button
               type="button"
               onClick={addStaffRow}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-sm font-semibold"
             >
               + Add Staff Member
             </button>
@@ -569,14 +569,14 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
             <button
               type="button"
               onClick={handleCancel}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+              className="px-6 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition"
+              className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 transition text-sm font-semibold"
             >
               {loading ? 'Submitting...' : editingOvertimeId ? 'Update' : 'File Overtime'}
             </button>
@@ -587,21 +587,21 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
 
       {/* Submitted Overtimes List */}
       {showMyRequestsSection && (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        {showRequestSection && <h2 className="text-2xl font-bold text-gray-800 mb-4">My Overtime Requests</h2>}
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-6">
+        {showRequestSection && <h2 className="text-2xl font-bold text-blue-950 mb-4">My Overtime Requests</h2>}
 
-        <div className="mb-4 flex flex-col sm:flex-row gap-2">
+        <div className="mb-4 flex flex-col sm:flex-row gap-2 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
           <input
             type="text"
             value={historySearchValue}
             onChange={(e) => setHistorySearchValue(e.target.value)}
             placeholder="Search overtime requests..."
-            className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:flex-1 px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
           />
           <select
             value={historySearchAttribute}
             onChange={(e) => setHistorySearchAttribute(e.target.value)}
-            className="w-full sm:w-56 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full sm:w-56 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
           >
             <option value="overtimeId">Overtime ID</option>
             <option value="purpose">Purpose</option>
@@ -612,41 +612,41 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
         </div>
         
         {filteredSubmittedOvertimes.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No overtime requests filed yet</p>
+          <p className="text-blue-700 text-center py-8 bg-blue-50 border border-blue-100 rounded-lg">No overtime requests filed yet</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+          <div className="overflow-x-auto rounded-lg border border-blue-100">
+            <table className="w-full border-collapse text-[13px] text-slate-700">
               <thead>
-                <tr className="bg-gray-200">
-                  <th className="border px-4 py-2 text-left font-bold">Filing Date</th>
-                  <th className="border px-4 py-2 text-left font-bold">Purpose</th>
-                  <th className="border px-4 py-2 text-left font-bold">From Date</th>
-                  <th className="border px-4 py-2 text-left font-bold">To Date</th>
-                  <th className="border px-4 py-2 text-left font-bold">Status</th>
-                  <th className="border px-4 py-2 text-center font-bold">Actions</th>
+                <tr className="bg-blue-100/80 text-blue-900">
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Filing Date</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Purpose</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">From Date</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">To Date</th>
+                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Status</th>
+                  <th className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSubmittedOvertimes.map((overtime) => (
-                  <tr key={overtime.overtimeId} className="border hover:bg-gray-50">
-                    <td className="border px-4 py-2">{new Date(overtime.filingDate).toLocaleDateString()}</td>
-                    <td className="border px-4 py-2">{overtime.purposeOfOvertime}</td>
-                    <td className="border px-4 py-2">{new Date(overtime.inclusiveDateStart).toLocaleDateString()}</td>
-                    <td className="border px-4 py-2">{new Date(overtime.inclusiveDateEnd).toLocaleDateString()}</td>
-                    <td className="border px-4 py-2">
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(getDisplayStatus(overtime))}`}>
+                  <tr key={overtime.overtimeId} className="border border-blue-100 hover:bg-blue-50/50">
+                    <td className="border border-blue-100 px-3 py-1.5">{new Date(overtime.filingDate).toLocaleDateString()}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">{overtime.purposeOfOvertime}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">{new Date(overtime.inclusiveDateStart).toLocaleDateString()}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">{new Date(overtime.inclusiveDateEnd).toLocaleDateString()}</td>
+                    <td className="border border-blue-100 px-3 py-1.5">
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(getDisplayStatus(overtime))}`}>
                         {getDisplayStatus(overtime)}
                       </span>
                       {getStageLabel(overtime) && (
                         <p className="text-xs text-gray-600 mt-1">{getStageLabel(overtime)}</p>
                       )}
                     </td>
-                    <td className="border px-4 py-2 text-center space-x-2">
+                    <td className="border border-blue-100 px-3 py-1.5 text-center space-x-2">
                       <button
                         onClick={() => {
                           setSelectedOvertime(overtime);
                         }}
-                        className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition inline-block"
+                        className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition inline-block text-xs font-semibold"
                         title="View details"
                       >
                         View
@@ -654,7 +654,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                       {canPrintOvertime(overtime) && (
                         <button
                           onClick={() => printOvertimeRequest(overtime)}
-                          className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 transition inline-block"
+                          className="px-3 py-1 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition inline-block text-xs font-semibold"
                           title="Print approved request"
                         >
                           Print
@@ -664,14 +664,14 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                         <>
                           <button
                             onClick={() => setSearchParams({ edit: overtime.overtimeId })}
-                            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition inline-block"
+                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition inline-block text-xs font-semibold"
                             title="Edit request"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteOvertime(overtime.overtimeId)}
-                            className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition inline-block"
+                            className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition inline-block text-xs font-semibold"
                             title="Delete request"
                           >
                             Delete
@@ -690,10 +690,10 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
 
       {/* View Details Modal */}
       {selectedOvertime && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-blue-600 text-white p-6 flex justify-between items-center sticky top-0">
+            <div className="bg-blue-500 text-white p-6 flex justify-between items-center sticky top-0">
               <h2 className="text-2xl font-bold">Overtime Request Details</h2>
               <button
                 onClick={() => setSelectedOvertime(null)}
@@ -810,14 +810,14 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
               <div className="flex gap-4 justify-end pt-4 border-t">
                 <button
                   onClick={() => setSelectedOvertime(null)}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+                  className="px-6 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
                 >
                   Close
                 </button>
                 {canPrintOvertime(selectedOvertime) && (
                   <button
                     onClick={() => printOvertimeRequest(selectedOvertime)}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                    className="px-6 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition text-sm font-semibold"
                   >
                     Print
                   </button>
@@ -829,7 +829,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                       setSelectedOvertime(null);
                       setSearchParams({ edit: selectedOvertime.overtimeId });
                     }}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-sm font-semibold"
                   >
                     Edit
                   </button>

@@ -172,7 +172,7 @@ export default function OtherStep({ formData, loading,
 
         {/* Separated from service */}
         <div className="mb-4">
-          <p className="mb-1">Have you ever been separated from the service in any of the following modes: resignation, retirement, dropped from the rolls, dismissal, termination, end of term, finished contract or phased out (abolition) in the public or private sector?</p>
+          <p className="mb-1">Have you ever been separated from the service in any of the following modes: resignation, retirement, dropped from the roles, dismissal, termination, end of term, finished contract or phased out (abolition) in the public or private sector?</p>
           <div className="flex items-center gap-4 mb-2">
             <label className="flex items-center gap-2">
               <input type="radio" name="separated" value="Y" checked={formData.separated === 'Y'} onChange={handleChange} disabled={loading} /> Yes

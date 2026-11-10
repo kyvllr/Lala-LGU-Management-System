@@ -21,6 +21,10 @@ export const normalizeRole = (rawRole) => {
   return role;
 };
 
+export const isDepartmentStaffManager = (role) => (
+  isAdmin(role) || normalizeRole(role) === ROLES.HEAD_OFFICER
+);
+
 // Departments
 export const DEPARTMENTS = [
   'Accountant',

@@ -348,7 +348,14 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                 </tr>
                 <tr class="sep inner">
                   <td style="font-weight:700">PLEASE CHECK</td>
-                  <td>${escapeHtml([order.officialBusiness ? 'Official Business' : null, order.officialTime ? 'Official Time' : null].filter(Boolean).join(', '))}</td>
+                  <td>${escapeHtml([
+                    order.officialBusiness ? 'Official Business' : null,
+                    order.officialTime ? 'Official Time' : null,
+                    order.meeting ? 'Meeting' : null,
+                    order.travel ? 'Travel' : null,
+                    order.training ? 'Training' : null,
+                    order.seminar ? 'Seminar' : null,
+                  ].filter(Boolean).join(', '))}</td>
                 </tr>
                 <tr class="sep inner">
                   <td style="font-weight:700">VENUE / DESTINATION</td>
@@ -520,10 +527,10 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
 
   return (
     <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-2">Approve Travel Orders</h1>
-      <p className="text-gray-600 mb-6 text-sm">Admin - Final Approval Level - These travel orders have been approved by the Head Officer</p>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Approve Travel Orders</h1>
+      <p className="text-blue-700/80 mb-6 text-sm">Admin - Final Approval Level - These travel orders have been approved by the Head Officer</p>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
 
       {/* Search and Filter Bar */}
 
@@ -532,7 +539,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
         <div className="lg:col-span-1">
 
             {/* Search and Filter Bar */}
-            <div className="mb-6 flex flex-col sm:flex-row gap-2 w-full">
+            <div className="mb-6 flex flex-col sm:flex-row gap-2 w-full rounded-lg border border-blue-100 bg-blue-50/60 p-3">
               <div className="relative flex-1">
                 <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
@@ -540,7 +547,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   placeholder="Search travel orders..."
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 />
               </div>
               <select
@@ -549,7 +556,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   setFilterAttribute(e.target.value);
                   setSearchValue('');
                 }}
-                className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white cursor-pointer"
+                className="w-full sm:w-40 sm:shrink-0 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 font-medium bg-white cursor-pointer"
               >
                 <option value="staffName">Staff Name</option>
                 <option value="destination">Destination</option>
@@ -559,7 +566,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
             </div>
 
           <div className="mb-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-blue-700/80">
               Showing <span className="font-bold">{filteredOrders.length}</span> of <span className="font-bold">{travelOrders.length}</span> travel orders
             </p>
           </div>
@@ -569,20 +576,20 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
               <div
                 key={order.travelOrderId}
                 onClick={() => setSelectedOrder(order)}
-                className={`bg-white p-4 rounded shadow cursor-pointer transition ${
-                  selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-600' : ''
+                className={`bg-white p-4 rounded-lg border border-blue-100 shadow-sm cursor-pointer transition ${
+                  selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-500' : ''
                 }`}
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold">{order.staffName}</h3>
-                    <p className="text-gray-600 text-sm">{order.destination || order.travelDestination || order.venueDestination || 'N/A'}</p>
-                    <p className="text-gray-600 text-sm">
+                    <h3 className="font-semibold text-blue-950">{order.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm">{order.destination || order.travelDestination || order.venueDestination || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-sm">
                       {formatDate(order.dateFrom)} - {formatDate(order.dateTo)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className={`px-3 py-1 rounded text-sm block ${
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold block ${
                       order.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
                     }`}>
                       {order.status === 'Approved' ? 'Approved' : `${order.numberOfDays} days`}
@@ -594,7 +601,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                           e.stopPropagation();
                           printTravelOrder(order);
                         }}
-                        className="mt-2 w-full bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-800"
+                        className="mt-2 w-full bg-slate-600 text-white px-3 py-1 rounded-md hover:bg-slate-700 text-xs font-semibold"
                       >
                         Print
                       </button>
@@ -616,69 +623,80 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
 
         {/* Approval Panel */}
         {selectedOrder && (
-          <div className="bg-white p-6 rounded shadow lg:col-span-1">
-            <h2 className="text-xl font-bold mb-4">Travel Order Details</h2>
+          <div className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm lg:col-span-1">
+            <h2 className="text-xl font-bold text-blue-950 mb-4">Travel Order Details</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <div>
-                <p className="text-gray-600 text-sm">Staff</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Staff</p>
                 <p className="font-bold">{selectedOrder.staffName}</p>
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Travel Type</p>
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">Travel Type</p>
                 <p className="font-bold">{selectedOrder.travelType === 'abroad' || selectedOrder.controlNo ? 'Travel Abroad' : 'Travel Order / Office Order'}</p>
               </div>
               {(selectedOrder.travelType === 'abroad' || selectedOrder.controlNo) ? (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Date Prepared</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date Prepared</p>
                     <p className="font-bold">{formatDate(selectedOrder.datePrepared)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Control Number</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Control Number</p>
                     <p className="font-bold">{selectedOrder.controlNo || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Date of Filing</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date of Filing</p>
                     <p className="font-bold">{formatDate(selectedOrder.abroadDateOfFiling || selectedOrder.dateOfFiling || selectedOrder.createdAt)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period</p>
                     <p className="font-bold">{selectedOrder.period || `${formatDate(selectedOrder.dateFrom)} - ${formatDate(selectedOrder.dateTo)}`}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Fund Source</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Fund Source</p>
                     <p className="font-bold">{selectedOrder.fundSource || selectedOrder.fundSourcePapCode || selectedOrder.fundSourceCode || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Attachment</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Attachment</p>
                     <p className="font-bold">{selectedOrder.attachment || selectedOrder.attachmentName || selectedOrder.attachments || 'N/A'}</p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Name/s/Designation</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Name/s/Designation</p>
                     <p className="font-bold">{selectedOrder.designations?.length ? selectedOrder.designations.join(', ') : (selectedOrder.position || 'N/A')}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Purpose of Travel</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Purpose of Travel</p>
                     <p className="font-bold">{selectedOrder.purposeOfTravel || selectedOrder.purpose || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Activity Organized/Sponsored By</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Activity Organized/Sponsored By</p>
                     <p className="font-bold">{selectedOrder.activitySponsoredBy || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period Covered</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period Covered</p>
                     <p className="font-bold">{formatDate(selectedOrder.periodCoveredFrom || selectedOrder.dateFrom)} - {formatDate(selectedOrder.periodCoveredTo || selectedOrder.dateTo)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Venue/Destination</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Please Check</p>
+                    <p className="font-bold">{[
+                      selectedOrder.officialBusiness ? 'Official Business' : null,
+                      selectedOrder.officialTime ? 'Official Time' : null,
+                      selectedOrder.meeting ? 'Meeting' : null,
+                      selectedOrder.travel ? 'Travel' : null,
+                      selectedOrder.training ? 'Training' : null,
+                      selectedOrder.seminar ? 'Seminar' : null,
+                    ].filter(Boolean).join(', ') || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Venue/Destination</p>
                     <p className="font-bold">{selectedOrder.venueDestination || selectedOrder.destination || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Expenses Covered</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Expenses Covered</p>
                     <p className="font-bold">{selectedOrder.expensesCovered || 'N/A'}</p>
                   </div>
                 </>
@@ -692,7 +710,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
-                  className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                 ></textarea>
               </div>
 
@@ -700,7 +718,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                 <button
                   type="button"
                   onClick={() => printTravelOrder(selectedOrder)}
-                  className="w-full py-2 rounded text-white font-bold bg-gray-700 hover:bg-gray-800"
+                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-slate-600 hover:bg-slate-700"
                 >
                   Print
                 </button>
@@ -709,7 +727,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   <button
                     type="button"
                     onClick={handleApprove}
-                    className="w-full py-2 rounded text-white font-bold bg-green-600 hover:bg-green-700"
+                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                   >
                     Approve
                   </button>
@@ -719,7 +737,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                       setDisapproveComment('');
                       setShowDisapproveModal(true);
                     }}
-                    className="w-full py-2 rounded text-white font-bold bg-red-600 hover:bg-red-700"
+                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                   >
                     Disapprove
                   </button>
@@ -729,7 +747,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                       setRevisionComment('');
                       setShowRevisionModal(true);
                     }}
-                    className="w-full py-2 rounded text-white font-bold bg-amber-600 hover:bg-amber-700"
+                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                   >
                     Approve with Revision
                   </button>
@@ -741,29 +759,29 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
               onChange={(e) => setDisapproveComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Reason for disapproval"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowDisapproveModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDisapprove}
-                className="px-4 py-2 rounded bg-red-600 text-white"
+                className="px-4 py-2 rounded-md bg-red-500 text-white text-sm font-semibold"
               >
                 Confirm Disapprove
               </button>
@@ -773,29 +791,29 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
             <h3 className="text-lg font-bold mb-3">Approve with Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}
               onChange={(e) => setRevisionComment(e.target.value)}
               rows="4"
-              className="w-full px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
               placeholder="Required revisions"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowRevisionModal(false)}
-                className="px-4 py-2 rounded bg-gray-200"
+                className="px-4 py-2 rounded-md bg-slate-200 text-slate-800 text-sm font-semibold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleApproveWithRevision}
-                className="px-4 py-2 rounded bg-amber-600 text-white"
+                className="px-4 py-2 rounded-md bg-orange-500 text-white text-sm font-semibold"
               >
                 Send for Revision
               </button>

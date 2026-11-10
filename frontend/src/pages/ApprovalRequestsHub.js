@@ -8,6 +8,9 @@ import ApproveOvertimeAdmin from './ApproveOvertimeAdmin';
 import ApproveOvertimeHeadRequisitioning from './ApproveOvertimeHeadRequisitioning';
 import ApproveOvertimeBudgetOfficer from './ApproveOvertimeBudgetOfficer';
 import ApprovePendingStaff from './ApprovePendingStaff';
+import ApproveCOEsAdmin from './ApproveCOEsAdmin';
+import ApproveNoPendencyRequests from './ApproveNoPendencyRequests';
+import ApproveNoLeaveWithoutPayCertificates from './ApproveNoLeaveWithoutPayCertificates';
 import { isAdmin, normalizeRole, ROLES } from '../constants';
 
 function ApprovalRequestsHub({ userRole }) {
@@ -29,7 +32,7 @@ function ApprovalRequestsHub({ userRole }) {
         {
           key: 'accounts',
           label: 'Account Requests',
-          render: () => <ApprovePendingStaff />,
+          render: () => <ApprovePendingStaff canReviewProfileRequests />,
         },
         {
           key: 'leave',
@@ -45,6 +48,21 @@ function ApprovalRequestsHub({ userRole }) {
           key: 'overtime',
           label: 'Overtime Requests',
           render: (status) => <ApproveOvertimeAdmin forcedStatus={status} />,
+        },
+        {
+          key: 'coe',
+          label: 'COE Requests',
+          render: (status) => <ApproveCOEsAdmin forcedStatus={status} />,
+        },
+        {
+          key: 'no-pendency',
+          label: 'No Pending Case Requests',
+          render: (status) => <ApproveNoPendencyRequests forcedStatus={status} />,
+        },
+        {
+          key: 'no-leave-without-pay',
+          label: 'Certificate Requests',
+          render: (status) => <ApproveNoLeaveWithoutPayCertificates forcedStatus={status} />,
         },
       ];
     }
@@ -70,6 +88,21 @@ function ApprovalRequestsHub({ userRole }) {
           key: 'overtime',
           label: 'Overtime Requests',
           render: (status) => <ApproveOvertimeHeadRequisitioning forcedStatus={status} />,
+        },
+        {
+          key: 'coe',
+          label: 'COE Requests',
+          render: (status) => <ApproveCOEsAdmin forcedStatus={status} />,
+        },
+        {
+          key: 'no-pendency',
+          label: 'No Pending Case Requests',
+          render: (status) => <ApproveNoPendencyRequests forcedStatus={status} />,
+        },
+        {
+          key: 'no-leave-without-pay',
+          label: 'Certificate Requests',
+          render: (status) => <ApproveNoLeaveWithoutPayCertificates forcedStatus={status} />,
         },
       ];
     }

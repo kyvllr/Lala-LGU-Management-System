@@ -99,7 +99,7 @@ Content-Type: application/json
 }
 ```
 
-**Leave Types**: `Vacation`, `Sick Leave`, `Emergency Leave`, `Special Leave`, `Study Leave`
+**Leave Types**: `Vacation`, `Sick Leave`, `Emergency Leave`, `Special Leave`, `Study Leave`, `Wellness`
 
 #### Get All Leave Requests
 ```
@@ -272,7 +272,7 @@ DELETE /travel-orders/:travelOrderId
   leaveId: String (unique, required),
   staffId: String (required),
   staffName: String,
-  leaveType: String (Vacation, Sick Leave, Emergency Leave, Special Leave, Study Leave),
+  leaveType: String (Vacation, Sick Leave, Emergency Leave, Special Leave, Study Leave, Wellness),
   startDate: Date (required),
   endDate: Date (required),
   numberOfDays: Number,

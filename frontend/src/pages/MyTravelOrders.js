@@ -254,29 +254,29 @@ function MyTravelOrders({ staffId }) {
   });
 
   if (!staffId) {
-    return <div className="text-center p-8 text-red-600">Please enter your Staff ID in the navigation bar</div>;
+    return <div className="text-center p-8 text-red-600 font-medium">Please enter your Item Number in the navigation bar</div>;
   }
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
   return (
     <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-6">My Travel Orders</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-6">My Travel Orders</h1>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
+      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
 
-      <div className="mb-4 flex flex-col sm:flex-row gap-2">
+      <div className="mb-4 flex flex-col sm:flex-row gap-2 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
         <input
           type="text"
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder="Search travel orders..."
-          className="w-full sm:flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full sm:flex-1 px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
         />
         <select
           value={searchAttribute}
           onChange={(e) => setSearchAttribute(e.target.value)}
-          className="w-full sm:w-56 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="w-full sm:w-56 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
         >
           <option value="travelOrderId">Travel ID</option>
           <option value="name">Name</option>
@@ -287,8 +287,8 @@ function MyTravelOrders({ staffId }) {
         </select>
       </div>
 
-      <div className="mb-4">
-        <label className="mr-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-sm text-blue-900">
+        <label className="mr-1 inline-flex items-center gap-1.5">
           <input
             type="radio"
             value=""
@@ -297,7 +297,7 @@ function MyTravelOrders({ staffId }) {
           />
           {' '}All
         </label>
-        <label className="mr-4">
+        <label className="mr-1 inline-flex items-center gap-1.5">
           <input
             type="radio"
             value="Pending"
@@ -306,7 +306,7 @@ function MyTravelOrders({ staffId }) {
           />
           {' '}Pending
         </label>
-        <label className="mr-4">
+        <label className="mr-1 inline-flex items-center gap-1.5">
           <input
             type="radio"
             value="Approved"
@@ -315,7 +315,7 @@ function MyTravelOrders({ staffId }) {
           />
           {' '}Approved
         </label>
-        <label className="mr-4">
+        <label className="mr-1 inline-flex items-center gap-1.5">
           <input
             type="radio"
             value="Disapproved"
@@ -324,7 +324,7 @@ function MyTravelOrders({ staffId }) {
           />
           {' '}Disapproved
         </label>
-        <label className="mr-4">
+        <label className="mr-1 inline-flex items-center gap-1.5">
           <input
             type="radio"
             value="For Revision"
@@ -338,7 +338,7 @@ function MyTravelOrders({ staffId }) {
 
       <div className="space-y-4">
         {filteredOrders.map((order) => (
-          <div key={order.travelOrderId} className="bg-white p-6 rounded shadow">
+          <div key={order.travelOrderId} className="bg-white p-5 rounded-lg border border-blue-100 shadow-sm">
             {(() => {
               const isAbroad = order.travelType === 'abroad' || Boolean(order.controlNo);
 
@@ -346,14 +346,14 @@ function MyTravelOrders({ staffId }) {
                 <>
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-xl font-bold">{isAbroad ? 'Travel Abroad' : 'Travel Order / Office Order'}</h3>
-                <p className="text-gray-600">ID: {order.travelOrderId}</p>
-                {order.controlNo && <p className="text-gray-600">Control No.: {order.controlNo}</p>}
+                <h3 className="text-lg font-bold text-blue-950">{isAbroad ? 'Travel Abroad' : 'Travel Order / Office Order'}</h3>
+                <p className="text-blue-700/80 text-sm">ID: {order.travelOrderId}</p>
+                {order.controlNo && <p className="text-blue-700/80 text-sm">Control No.: {order.controlNo}</p>}
               </div>
-              <span className={`px-4 py-2 rounded text-white font-bold ${
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-white text-xs font-semibold ${
                 order.status === 'Approved' ? 'bg-green-600' :
                 order.status === 'Disapproved' ? 'bg-red-600' :
-                order.status === 'For Revision' ? 'bg-purple-600' :
+                order.status === 'For Revision' ? 'bg-orange-500' :
                 'bg-yellow-600'
               }`}>
                 {order.status}
@@ -364,67 +364,67 @@ function MyTravelOrders({ staffId }) {
               {isAbroad ? (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Date Prepared</p>
-                    <p className="font-bold">{formatDate(order.datePrepared)}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date Prepared</p>
+                    <p className="font-semibold text-slate-800">{formatDate(order.datePrepared)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Control Number</p>
-                    <p className="font-bold">{order.controlNo || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Control Number</p>
+                    <p className="font-semibold text-slate-800">{order.controlNo || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Date of Filing</p>
-                    <p className="font-bold">{formatDate(order.abroadDateOfFiling || order.dateOfFiling || order.createdAt)}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Date of Filing</p>
+                    <p className="font-semibold text-slate-800">{formatDate(order.abroadDateOfFiling || order.dateOfFiling || order.createdAt)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period</p>
-                    <p className="font-bold">{order.period || `${formatDate(order.dateFrom)} - ${formatDate(order.dateTo)}`}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period</p>
+                    <p className="font-semibold text-slate-800">{order.period || `${formatDate(order.dateFrom)} - ${formatDate(order.dateTo)}`}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Fund Source</p>
-                    <p className="font-bold">{order.fundSource || order.fundSourcePapCode || order.fundSourceCode || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Fund Source</p>
+                    <p className="font-semibold text-slate-800">{order.fundSource || order.fundSourcePapCode || order.fundSourceCode || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Attachment</p>
-                    <p className="font-bold">{order.attachment || order.attachmentName || order.attachments || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Attachment</p>
+                    <p className="font-semibold text-slate-800">{order.attachment || order.attachmentName || order.attachments || 'N/A'}</p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <p className="text-gray-600 text-sm">Name/s/Designation</p>
-                    <p className="font-bold">{order.designations?.length ? order.designations.join(', ') : (order.position || 'N/A')}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Name/s/Designation</p>
+                    <p className="font-semibold text-slate-800">{order.designations?.length ? order.designations.join(', ') : (order.position || 'N/A')}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Purpose of Travel</p>
-                    <p className="font-bold">{order.purposeOfTravel || order.purpose || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Purpose of Travel</p>
+                    <p className="font-semibold text-slate-800">{order.purposeOfTravel || order.purpose || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Activity Organized/Sponsored By</p>
-                    <p className="font-bold">{order.activitySponsoredBy || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Activity Organized/Sponsored By</p>
+                    <p className="font-semibold text-slate-800">{order.activitySponsoredBy || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Period Covered</p>
-                    <p className="font-bold">{formatDate(order.periodCoveredFrom || order.dateFrom)} - {formatDate(order.periodCoveredTo || order.dateTo)}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Period Covered</p>
+                    <p className="font-semibold text-slate-800">{formatDate(order.periodCoveredFrom || order.dateFrom)} - {formatDate(order.periodCoveredTo || order.dateTo)}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Venue/Destination</p>
-                    <p className="font-bold">{order.venueDestination || order.destination || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Venue/Destination</p>
+                    <p className="font-semibold text-slate-800">{order.venueDestination || order.destination || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-600 text-sm">Expenses Covered</p>
-                    <p className="font-bold">{order.expensesCovered || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide">Expenses Covered</p>
+                    <p className="font-semibold text-slate-800">{order.expensesCovered || 'N/A'}</p>
                   </div>
                 </>
               )}
             </div>
 
             {order.status !== 'Pending' && (
-              <div className="border-t pt-4">
-                <p className="text-gray-600 text-sm">{order.status === 'For Revision' ? 'Requested By' : 'Approved By'}</p>
-                <p className="font-bold">{order.status === 'For Revision' ? (order.revisionRequestedBy || 'N/A') : (order.approvedBy || 'N/A')}</p>
+              <div className="border-t border-blue-100 pt-4">
+                <p className="text-blue-700/80 text-xs uppercase tracking-wide">{order.status === 'For Revision' ? 'Requested By' : 'Approved By'}</p>
+                <p className="font-semibold text-slate-800">{order.status === 'For Revision' ? (order.revisionRequestedBy || 'N/A') : (order.approvedBy || 'N/A')}</p>
                 {order.remarks && (
                   <>
-                    <p className="text-gray-600 text-sm mt-2">{order.status === 'For Revision' ? 'Revision Comment' : 'Remarks'}</p>
+                    <p className="text-blue-700/80 text-xs uppercase tracking-wide mt-2">{order.status === 'For Revision' ? 'Revision Comment' : 'Remarks'}</p>
                     <p>{order.remarks}</p>
                   </>
                 )}
@@ -435,7 +435,7 @@ function MyTravelOrders({ staffId }) {
               {order.status === 'Pending' && (
                 <button
                   onClick={() => deleteTravelOrder(order.travelOrderId)}
-                  className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                  className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 text-sm font-semibold"
                 >
                   Delete Order
                 </button>
@@ -443,7 +443,7 @@ function MyTravelOrders({ staffId }) {
               {order.status === 'For Revision' && (
                 <button
                   onClick={() => navigate(`/file-travel?edit=${order.travelOrderId}`)}
-                  className="bg-amber-600 text-white px-4 py-2 rounded hover:bg-amber-700"
+                  className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 text-sm font-semibold"
                 >
                   Edit & Resubmit
                 </button>
@@ -455,7 +455,7 @@ function MyTravelOrders({ staffId }) {
                       const ok = printTravelOrderShared(order);
                       if (!ok) setError('Unable to open print window. Please allow pop-ups and try again.');
                     }}
-                    className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+                    className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 text-sm font-semibold"
                   >
                     Print
                   </button>
@@ -471,7 +471,7 @@ function MyTravelOrders({ staffId }) {
       </div>
 
       {filteredOrders.length === 0 && (
-        <div className="text-center p-8 text-gray-600">No travel orders found</div>
+        <div className="text-center p-8 text-blue-700 bg-blue-50 border border-blue-100 rounded-lg">No travel orders found</div>
       )}
     </div>
   );

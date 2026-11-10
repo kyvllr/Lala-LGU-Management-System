@@ -65,6 +65,34 @@ export default function WorkExperienceStep({ formData, loading, handleWorkChange
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={we.monthlySalary || ''}
+                  onChange={(e) => handleWorkChange(index, 'monthlySalary', e.target.value)}
+                  placeholder="e.g., 25000.00"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Salary / Job / Pay Grade &amp; Step Increment
+                </label>
+                <input
+                  type="text"
+                  value={we.salaryJobPayGrade || ''}
+                  onChange={(e) => handleWorkChange(index, 'salaryJobPayGrade', e.target.value)}
+                  placeholder="00-0 (e.g., 24-1)"
+                  pattern="(?:[0-9]{2}-[0-9]|N/A)"
+                  maxLength={4}
+                  title={'Use the format "00-0" (for example, 24-1), or enter N/A.'}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status of Appointment</label>
                 <input
                   type="text"

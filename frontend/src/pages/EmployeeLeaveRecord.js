@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TbEye, TbEdit, TbTrash } from 'react-icons/tb';
 import { staffAPI, leaveAPI } from '../api';
-import { isAdmin, normalizeRole } from '../constants';
+import { isDepartmentStaffManager, normalizeRole } from '../constants';
 import { exportToCsv } from '../exportCsv';
 // CSV import utility
 function importFromCsv(file, callback) {
@@ -37,10 +37,10 @@ function EmployeeLeaveRecord() {
     setUser(normalizedUser);
     
     // Non-admin users can only view their own leave record
-    if (normalizedUser && !isAdmin(normalizedUser.role)) {
+    if (normalizedUser && !isDepartmentStaffManager(normalizedUser.role)) {
       const ownStaffId = normalizedUser.staffId || normalizedUser.id;
       if (!ownStaffId) {
-        setError('Unable to determine your staff ID.');
+        setError('Unable to determine your Item Number.');
         setLoading(false);
         return;
       }
@@ -57,7 +57,7 @@ function EmployeeLeaveRecord() {
       setError('');
       const storedUser = JSON.parse(localStorage.getItem('user'));
 
-      if (isAdmin(storedUser.role)) {
+      if (isDepartmentStaffManager(storedUser.role)) {
         // Admin sees all approved staff
         console.log('[EmployeeLeaveRecord] Fetching all staff...');
         const staffRes = await staffAPI.getAll();
@@ -99,58 +99,59 @@ function EmployeeLeaveRecord() {
 
   const displayedStaffs = filteredStaffs.slice(0, recordsToShow);
 
-  if (loading) return <div className="text-center p-8">Loading...</div>;
+  if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
 
   return (
-    <div className="mt-6">
-      <h1 className="text-3xl font-bold mb-6">Employee's Leave Record</h1>
+    <div className="mt-6 space-y-5">
+      <h1 className="text-4xl font-bold tracking-tight text-blue-950 mb-6">Employee's Leave Record</h1>
 
-      {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
-
-      
+      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">{error}</div>}
 
       {/* Search Bar */}
-      <div className="mb-6 flex gap-4 items-center">
-        <input
-          type="text"
-          placeholder="Search by name, employee ID, or position..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-4 py-2 border rounded focus:outline-none focus:border-blue-500"
-        />
+      <div className="mb-6 bg-blue-50/70 border border-blue-100 p-4 rounded-lg shadow-sm">
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-semibold uppercase tracking-wide text-blue-800">Search Staff</label>
+          <input
+            type="text"
+            placeholder="Search by name, employee ID, or position..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
+          />
+        </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white shadow rounded overflow-x-auto">
+      <div className="bg-white border border-blue-100 shadow-sm rounded-lg overflow-x-auto">
         {displayedStaffs.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">
+          <div className="p-8 text-center text-blue-700 bg-blue-50/40">
             {searchQuery ? 'No staff found matching your search.' : 'No staff available.'}
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-blue-100 border-b">
+          <table className="w-full text-[13px] text-slate-700">
+            <thead className="bg-blue-100/80 border-b border-blue-200 text-blue-900">
               <tr>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Employee ID</th>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Name</th>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Position</th>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Department</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">Action</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold">Employee ID</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold">Department</th>
+                <th className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
               {displayedStaffs.map((staff) => (
-                <tr key={staff._id} className="border-b hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 text-gray-800">{staff.employeeId || 'N/A'}</td>
-                  <td className="px-6 py-4 text-gray-800">{staff.name}</td>
-                  <td className="px-6 py-4 text-gray-800">{staff.position || 'N/A'}</td>
-                  <td className="px-6 py-4 text-gray-800">{staff.department || 'N/A'}</td>
-                  <td className="px-6 py-4 text-center">
+                <tr key={staff._id} className="border-b border-blue-50 hover:bg-blue-50/40 transition">
+                  <td className="px-4 py-2.5 text-slate-800">{staff.employeeId || 'N/A'}</td>
+                  <td className="px-4 py-2.5 text-slate-900 font-medium">{staff.name}</td>
+                  <td className="px-4 py-2.5 text-slate-800">{staff.position || 'N/A'}</td>
+                  <td className="px-4 py-2.5 text-slate-800">{staff.department || 'N/A'}</td>
+                  <td className="px-4 py-2.5 text-center">
                     <button
                       onClick={() => handleViewLeaveRecord(staff.id, staff.name)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                       title="View Leave Record"
                     >
-                      <TbEye size={18} />
+                      <TbEye size={16} />
                       View
                     </button>
                   </td>
@@ -166,11 +167,11 @@ function EmployeeLeaveRecord() {
         <div className="mt-6 flex items-center gap-4">
           <button
             onClick={() => setRecordsToShow(recordsToShow + 10)}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
           >
             Load More
           </button>
-          <span className="text-gray-600">
+          <span className="text-blue-700 text-sm">
             Showing {displayedStaffs.length} of {filteredStaffs.length} records
           </span>
         </div>
