@@ -13,17 +13,28 @@ require('dotenv').config();
 
 
 const app = express();
+// Vercel routes the backend under /api; strip it so the routes below match either way.
+app.use((req, res, next) => {
+  if (req.url === '/api' || req.url.startsWith('/api/') || req.url.startsWith('/api?')) {
+    req.url = req.url.slice(4) || '/';
+  }
+  next();
+});
 const PORT = process.env.PORT || 5001;
+const IS_VERCEL = Boolean(process.env.VERCEL);
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const VAULT_BASE_UPLOAD_DIR = path.join(__dirname, 'uploads', 'vault');
 const VAULT_DEFAULT_FOLDER = 'General';
 const PAYMENT_PROOF_UPLOAD_DIR = path.join(__dirname, 'uploads', 'payment-proofs');
 
-if (!fs.existsSync(VAULT_BASE_UPLOAD_DIR)) {
-  fs.mkdirSync(VAULT_BASE_UPLOAD_DIR, { recursive: true });
-}
-if (!fs.existsSync(PAYMENT_PROOF_UPLOAD_DIR)) {
-  fs.mkdirSync(PAYMENT_PROOF_UPLOAD_DIR, { recursive: true });
+// The Vercel filesystem is read-only outside /tmp, so only create upload folders locally.
+if (!IS_VERCEL) {
+  if (!fs.existsSync(VAULT_BASE_UPLOAD_DIR)) {
+    fs.mkdirSync(VAULT_BASE_UPLOAD_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(PAYMENT_PROOF_UPLOAD_DIR)) {
+    fs.mkdirSync(PAYMENT_PROOF_UPLOAD_DIR, { recursive: true });
+  }
 }
 
 const sanitizeFolderName = (name) => String(name || '')
@@ -9478,11 +9489,6 @@ app.get('/vault/files/:fileId/content', verifyToken, async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
 // Return JSON for oversized payloads (e.g., image-heavy DPCRF submissions)
 app.use((error, req, res, next) => {
   if (error && (error.type === 'entity.too.large' || error.status === 413)) {
@@ -9499,3 +9505,13 @@ app.use((error, req, res, next) => {
 
   return next(error);
 });
+
+// Local runs listen on PORT; Vercel imports this module and handles requests itself.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
+
