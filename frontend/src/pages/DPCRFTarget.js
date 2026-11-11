@@ -440,7 +440,7 @@ const normalizeSections = (sections = []) => (
   })
 );
 
-function EditableCell({ value, onChange, readOnly, className = '', multiline = false, fillCell = false }) {
+function EditableCell({ value, onChange, readOnly, className = '', multiline = false, fillCell = false, ariaLabel }) {
   const baseClass = `w-full text-[11px] p-1 outline-none ${readOnly ? 'cursor-default bg-transparent' : 'bg-blue-50/60 focus:bg-white'} ${className}`;
 
   if (multiline) {
@@ -449,6 +449,7 @@ function EditableCell({ value, onChange, readOnly, className = '', multiline = f
         value={value}
         onChange={(event) => onChange(event.target.value)}
         readOnly={readOnly}
+        aria-label={ariaLabel}
         rows={2}
         className={`${baseClass} resize-none ${fillCell ? 'h-full min-h-[260px]' : 'min-h-[50px]'}`}
       />
@@ -460,6 +461,7 @@ function EditableCell({ value, onChange, readOnly, className = '', multiline = f
       value={value}
       onChange={(event) => onChange(event.target.value)}
       readOnly={readOnly}
+      aria-label={ariaLabel}
       className={baseClass}
     />
   );
@@ -559,13 +561,14 @@ function RowBlock({ sectionIndex, blockIndex, block, readOnly, onBlockChange, on
                     if (file) onMovImageChange(file);
                     event.target.value = '';
                   }}
+                  aria-label="Upload means of verification image"
                   className="block w-full text-[11px] text-blue-800"
                 />
                 {block.meansOfVerification?.imageDataUrl && (
                   <button
                     type="button"
                     onClick={() => onMovImageChange(null)}
-                    className="rounded bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600"
+                    className="min-h-[44px] rounded bg-red-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-600 sm:min-h-0"
                   >
                     Remove
                   </button>
@@ -671,24 +674,24 @@ function PartIContent({
         <table className="min-w-[1300px] w-full border-collapse text-xs text-blue-950">
           <thead>
             <tr className="bg-blue-200 text-center">
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">MFO</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">KRA</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">Objective</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">Time Line</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">Weight /KRA</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">Scale</th>
-              <th colSpan={3} className="border border-blue-400 p-2 font-bold">Performance Indicators</th>
-              <th colSpan={3} className="border border-blue-400 p-2 font-bold">Actual Results</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">Ave. Rating</th>
-              <th rowSpan={2} className="border border-blue-400 p-2 font-bold">MOV</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">MFO</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">KRA</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">Objective</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">Time Line</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">Weight /KRA</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">Scale</th>
+              <th scope="colgroup" colSpan={3} className="border border-blue-400 p-2 font-bold">Performance Indicators</th>
+              <th scope="colgroup" colSpan={3} className="border border-blue-400 p-2 font-bold">Actual Results</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">Ave. Rating</th>
+              <th scope="col" rowSpan={2} className="border border-blue-400 p-2 font-bold">MOV</th>
             </tr>
             <tr className="bg-blue-200 text-center">
-              <th className="border border-blue-400 p-2 font-bold">Quality</th>
-              <th className="border border-blue-400 p-2 font-bold">Efficiency</th>
-              <th className="border border-blue-400 p-2 font-bold">Timeliness</th>
-              <th className="border border-blue-400 p-2 font-bold">Q</th>
-              <th className="border border-blue-400 p-2 font-bold">E</th>
-              <th className="border border-blue-400 p-2 font-bold">T</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">Quality</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">Efficiency</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">Timeliness</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">Q</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">E</th>
+              <th scope="col" className="border border-blue-400 p-2 font-bold">T</th>
             </tr>
           </thead>
           <tbody>
@@ -739,7 +742,7 @@ function PartIContent({
                       <button
                         type="button"
                         onClick={() => addRowBlock(sectionIndex)}
-                        className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                        className="inline-flex min-h-[44px] items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 sm:min-h-0"
                       >
                         + Add More
                       </button>
@@ -758,7 +761,7 @@ function PartIContent({
             type="button"
             onClick={onSubmit}
             disabled={submitLoading || submitLocked || submitDisabled}
-            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[44px] rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
           >
             {submitLoading ? 'Submitting...' : 'Submit Part I'}
           </button>
@@ -800,9 +803,9 @@ function PartIICompetencyTable({ competency, ratings, setRatings, readOnlySR, re
       <table className="min-w-full border-collapse text-xs text-blue-950">
         <thead>
           <tr className="bg-blue-100">
-            <th className="border border-blue-300 p-2 text-left text-base font-bold" colSpan={2}>{competency.title}</th>
-            <th className="border border-blue-300 p-2 font-bold">SR</th>
-            <th className="border border-blue-300 p-2 font-bold">AR</th>
+            <th scope="col" className="border border-blue-300 p-2 text-left text-base font-bold" colSpan={2}>{competency.title}</th>
+            <th scope="col" className="border border-blue-300 p-2 font-bold">SR</th>
+            <th scope="col" className="border border-blue-300 p-2 font-bold">AR</th>
           </tr>
         </thead>
         <tbody>
@@ -817,6 +820,7 @@ function PartIICompetencyTable({ competency, ratings, setRatings, readOnlySR, re
                     value={ratings[id]?.sr || ''}
                     onChange={(next) => updateRating(id, 'sr', next)}
                     readOnly={readOnlySR}
+                    ariaLabel={`${competency.title}, item ${index + 1}, SR`}
                   />
                 </td>
                 <td className="border border-blue-200 p-0 w-16">
@@ -827,6 +831,7 @@ function PartIICompetencyTable({ competency, ratings, setRatings, readOnlySR, re
                       updateRating(id, 'ar', next);
                     }}
                     readOnly={readOnlyAR}
+                    ariaLabel={`${competency.title}, item ${index + 1}, AR`}
                   />
                 </td>
               </tr>
@@ -893,11 +898,12 @@ function PartIIContent({ ratings, setRatings, readOnlySR, readOnlyAR, showSaveBu
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="rounded border border-gray-300 bg-white">
           <div className="p-3 text-red-700 text-3xl font-bold">Rating Scale:</div>
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-lime-200">
-                <th className="border border-gray-400 p-2">Description</th>
-                <th className="border border-gray-400 p-2 w-20">Scale</th>
+                <th scope="col" className="border border-gray-400 p-2">Description</th>
+                <th scope="col" className="border border-gray-400 p-2 w-20">Scale</th>
               </tr>
             </thead>
             <tbody>
@@ -908,10 +914,12 @@ function PartIIContent({ ratings, setRatings, readOnlySR, readOnlyAR, showSaveBu
               <tr><td className="border border-gray-300 p-2"><span className="font-bold">Rarely</span> = Does not meet standards; performance is consistently below expectations.</td><td className="border border-gray-300 p-2 text-center font-bold">1</td></tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         <div className="rounded border border-gray-300 bg-white">
-          <div className="bg-lime-400 p-3 text-5xl font-bold">Overall Rating:</div>
+          <div className="bg-lime-400 p-3 text-3xl font-bold sm:text-5xl">Overall Rating:</div>
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse text-lg">
             <tbody>
               <tr>
@@ -929,6 +937,7 @@ function PartIIContent({ ratings, setRatings, readOnlySR, readOnlyAR, showSaveBu
               </tr>
             </tbody>
           </table>
+          </div>
           <div className="p-3 text-xl italic font-semibold">
             where:
             <div>SR = Self Rate</div>
@@ -943,7 +952,7 @@ function PartIIContent({ ratings, setRatings, readOnlySR, readOnlyAR, showSaveBu
             type="button"
             onClick={onSave}
             disabled={saveLoading}
-            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[44px] rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
           >
             {saveLoading ? 'Saving...' : 'Save AR Ratings'}
           </button>
@@ -957,7 +966,7 @@ function PartIIContent({ ratings, setRatings, readOnlySR, readOnlyAR, showSaveBu
               type="button"
               onClick={onSubmitPartII}
               disabled={submitPartIILoading}
-              className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-[44px] rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
             >
               {submitPartIILoading ? 'Submitting...' : 'Submit Part II'}
             </button>
@@ -1045,14 +1054,14 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
         <table className="min-w-[1200px] w-full border-collapse text-sm text-slate-900">
           <thead>
             <tr className="bg-cyan-200 text-center">
-              <th colSpan={5} className="border border-cyan-400 px-3 py-3 text-3xl font-black text-slate-900">
+              <th scope="colgroup" colSpan={5} className="border border-cyan-400 px-3 py-3 text-3xl font-black text-slate-900">
                 PART III: SUMMARY OF RATINGS FOR DISCUSSION
               </th>
             </tr>
             <tr className="bg-slate-100 text-lg">
-              <th className="border border-slate-300 p-2 font-bold text-left" colSpan={3}>Final Performance Results</th>
-              <th className="border border-slate-300 p-2 font-bold text-center text-amber-800">Rating</th>
-              <th className="border border-slate-300 p-2 font-bold text-center text-amber-800">Adjectival Rating</th>
+              <th scope="col" className="border border-slate-300 p-2 font-bold text-left" colSpan={3}>Final Performance Results</th>
+              <th scope="col" className="border border-slate-300 p-2 font-bold text-center text-amber-800">Rating</th>
+              <th scope="col" className="border border-slate-300 p-2 font-bold text-center text-amber-800">Adjectival Rating</th>
             </tr>
           </thead>
           <tbody>
@@ -1088,6 +1097,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   value={part34Data.agreement.raterName}
                   onChange={(event) => updateAgreement('raterName', event.target.value)}
                   readOnly={readOnly}
+                  aria-label="Name of Rater"
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
               </td>
@@ -1099,6 +1109,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   value={part34Data.agreement.employeeSignature}
                   onChange={(event) => updateAgreement('employeeSignature', event.target.value)}
                   readOnly={readOnly}
+                  aria-label="Employee signature"
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
               </td>
@@ -1108,6 +1119,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   value={part34Data.agreement.raterSignature}
                   onChange={(event) => updateAgreement('raterSignature', event.target.value)}
                   readOnly={readOnly}
+                  aria-label="Rater signature"
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
               </td>
@@ -1120,6 +1132,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   value={part34Data.agreement.employeeDate}
                   onChange={(event) => updateAgreement('employeeDate', event.target.value)}
                   readOnly={readOnly}
+                  aria-label="Employee date"
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
               </td>
@@ -1130,6 +1143,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   value={part34Data.agreement.raterDate}
                   onChange={(event) => updateAgreement('raterDate', event.target.value)}
                   readOnly={readOnly}
+                  aria-label="Rater date"
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
               </td>
@@ -1142,16 +1156,16 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
         <table className="min-w-[1200px] w-full border-collapse text-sm text-slate-900">
           <thead>
             <tr className="bg-cyan-200 text-center">
-              <th colSpan={5} className="border border-cyan-400 px-3 py-3 text-3xl font-black text-slate-900">
+              <th scope="colgroup" colSpan={5} className="border border-cyan-400 px-3 py-3 text-3xl font-black text-slate-900">
                 PART IV: DEPARTMENT DEVELOPMENT PLANS (DDP)
               </th>
             </tr>
             <tr className="text-center text-2xl font-black">
-              <th className="border border-slate-400 bg-blue-100 p-2 text-rose-900">Strengths</th>
-              <th className="border border-slate-400 bg-lime-100 p-2 text-rose-900">Weaknesses</th>
-              <th className="border border-slate-400 bg-orange-100 p-2 text-rose-900">Opportunities</th>
-              <th className="border border-slate-400 bg-yellow-100 p-2 text-rose-900">Challenges</th>
-              <th className="border border-slate-400 bg-slate-200 p-2 text-rose-900">Resources Needed</th>
+              <th scope="col" className="border border-slate-400 bg-blue-100 p-2 text-rose-900">Strengths</th>
+              <th scope="col" className="border border-slate-400 bg-lime-100 p-2 text-rose-900">Weaknesses</th>
+              <th scope="col" className="border border-slate-400 bg-orange-100 p-2 text-rose-900">Opportunities</th>
+              <th scope="col" className="border border-slate-400 bg-yellow-100 p-2 text-rose-900">Challenges</th>
+              <th scope="col" className="border border-slate-400 bg-slate-200 p-2 text-rose-900">Resources Needed</th>
             </tr>
           </thead>
           <tbody>
@@ -1161,6 +1175,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <textarea
                     value={row.strengths}
                     onChange={(event) => updateDdpRow(rowIndex, 'strengths', event.target.value)}
+                    aria-label={`Strengths, row ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1170,6 +1185,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <textarea
                     value={row.weaknesses}
                     onChange={(event) => updateDdpRow(rowIndex, 'weaknesses', event.target.value)}
+                    aria-label={`Weaknesses, row ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1179,6 +1195,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <textarea
                     value={row.opportunities}
                     onChange={(event) => updateDdpRow(rowIndex, 'opportunities', event.target.value)}
+                    aria-label={`Opportunities, row ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1188,6 +1205,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <textarea
                     value={row.challenges}
                     onChange={(event) => updateDdpRow(rowIndex, 'challenges', event.target.value)}
+                    aria-label={`Challenges, row ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1197,6 +1215,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <textarea
                     value={row.resourcesNeeded}
                     onChange={(event) => updateDdpRow(rowIndex, 'resourcesNeeded', event.target.value)}
+                    aria-label={`Resources needed, row ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1214,6 +1233,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                   <input
                     value={row}
                     onChange={(event) => updateRecommendation(rowIndex, event.target.value)}
+                    aria-label={`Recommendation ${rowIndex + 1}`}
                     readOnly={readOnly}
                     className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                   />
@@ -1227,6 +1247,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                 <input
                   value={part34Data.footer.ratee || formInfo?.name || ''}
                   onChange={(event) => updateFooter('ratee', event.target.value)}
+                  aria-label="Ratee"
                   readOnly={readOnly}
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
@@ -1236,6 +1257,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                 <input
                   value={part34Data.footer.rater}
                   onChange={(event) => updateFooter('rater', event.target.value)}
+                  aria-label="Rater"
                   readOnly={readOnly}
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
@@ -1247,6 +1269,7 @@ function PartIIIIVContent({ sections, ratings, formInfo, readOnly, part34Data, s
                 <input
                   value={part34Data.footer.approvingOfficer}
                   onChange={(event) => updateFooter('approvingOfficer', event.target.value)}
+                  aria-label="Immediate head"
                   readOnly={readOnly}
                   className={`w-full p-2 outline-none ${readOnlyCellClass}`}
                 />
@@ -1306,18 +1329,18 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
         <table className="min-w-[1450px] w-full border-collapse text-[12px] text-slate-900">
           <thead>
             <tr className="bg-blue-100 text-center">
-              <th colSpan={spmsTotalColumns} className="border border-blue-300 p-3 text-4xl font-black">
+              <th scope="colgroup" colSpan={spmsTotalColumns} className="border border-blue-300 p-3 text-4xl font-black">
                 Strategic Performance Management System Calendar
               </th>
             </tr>
             <tr className="bg-slate-100 text-center text-[12px] font-bold">
-              <th className="border border-slate-300 p-2 w-12">No.</th>
-              <th className="border border-slate-300 p-2 w-56">Activity</th>
+              <th scope="col" className="border border-slate-300 p-2 w-12">No.</th>
+              <th scope="col" className="border border-slate-300 p-2 w-56">Activity</th>
               {SPMS_MONTHS.map((month) => (
-                <th key={month.key} className="border border-slate-300 p-2 w-20">{month.label}</th>
+                <th scope="col" key={month.key} className="border border-slate-300 p-2 w-20">{month.label}</th>
               ))}
-              <th className="border border-slate-300 p-2 w-40">Responsible Office/Actors</th>
-              {isAdminUser && <th className="border border-slate-300 p-2 w-16">Action</th>}
+              <th scope="col" className="border border-slate-300 p-2 w-40">Responsible Office/Actors</th>
+              {isAdminUser && <th scope="col" className="border border-slate-300 p-2 w-16">Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -1328,6 +1351,7 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
                   <textarea
                     value={row.activity}
                     onChange={(event) => updateRow(rowIndex, 'activity', event.target.value)}
+                    aria-label={`Activity ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1345,6 +1369,7 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
                           type="checkbox"
                           checked={isSpmsMonthChecked(row[month.key])}
                           onChange={(event) => toggleMonth(rowIndex, month.key, event.target.checked)}
+                          aria-label={`${month.label}, activity ${rowIndex + 1}`}
                           className="h-5 w-5 cursor-pointer accent-blue-700"
                         />
                       </div>
@@ -1355,6 +1380,7 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
                   <textarea
                     value={row.responsibleOfficeActors}
                     onChange={(event) => updateRow(rowIndex, 'responsibleOfficeActors', event.target.value)}
+                    aria-label={`Responsible office/actors, activity ${rowIndex + 1}`}
                     readOnly={readOnly}
                     rows={2}
                     className={`w-full resize-none p-2 outline-none ${readOnlyCellClass}`}
@@ -1365,7 +1391,7 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
                     <button
                       type="button"
                       onClick={() => deleteRow(rowIndex)}
-                      className="rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                      className="min-h-[44px] rounded bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700 sm:min-h-0"
                     >
                       Delete
                     </button>
@@ -1384,12 +1410,14 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
             value={spmsCalendar.preparedByName}
             onChange={(event) => updateMeta('preparedByName', event.target.value)}
             readOnly={readOnly}
+            aria-label="Prepared by name"
             className={`w-full border border-blue-200 p-2 text-lg font-bold outline-none ${readOnlyCellClass}`}
           />
           <input
             value={spmsCalendar.preparedByTitle}
             onChange={(event) => updateMeta('preparedByTitle', event.target.value)}
             readOnly={readOnly}
+            aria-label="Prepared by title"
             className={`w-full border border-blue-200 p-2 text-lg outline-none ${readOnlyCellClass}`}
           />
         </div>
@@ -1399,23 +1427,25 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
             value={spmsCalendar.approvedByName}
             onChange={(event) => updateMeta('approvedByName', event.target.value)}
             readOnly={readOnly}
+            aria-label="Approved by name"
             className={`w-full border border-blue-200 p-2 text-lg font-bold outline-none ${readOnlyCellClass}`}
           />
           <input
             value={spmsCalendar.approvedByTitle}
             onChange={(event) => updateMeta('approvedByTitle', event.target.value)}
             readOnly={readOnly}
+            aria-label="Approved by title"
             className={`w-full border border-blue-200 p-2 text-lg outline-none ${readOnlyCellClass}`}
           />
         </div>
       </div>
 
       {isAdminUser && (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={addRow}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            className="min-h-[44px] rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 sm:min-h-0"
           >
             + Add Row
           </button>
@@ -1423,7 +1453,7 @@ function SPMSCalendarContent({ spmsCalendar, setSpmsCalendar, isAdminUser, onSav
             type="button"
             onClick={onSave}
             disabled={saveLoading}
-            className="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[44px] rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0"
           >
             {saveLoading ? 'Saving...' : 'Save SPMS Calendar'}
           </button>
@@ -1783,6 +1813,7 @@ export default function DPCRFTarget() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-semibold text-blue-900">DPCRF Forms (CY/{selectedYear})</h2>
         <select
+          aria-label="Form view"
           value={adminViewMode}
           onChange={(event) => {
             const mode = event.target.value;
@@ -1802,8 +1833,9 @@ export default function DPCRFTarget() {
       {adminViewMode === ADMIN_VIEW_MODES.DEPARTMENT && (
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-blue-900">Search Name</label>
+            <label htmlFor="dpcrf-search-name" className="mb-1 block text-xs font-semibold text-blue-900">Search Name</label>
             <input
+              id="dpcrf-search-name"
               type="text"
               value={nameSearch}
               onChange={(event) => setNameSearch(event.target.value)}
@@ -1812,8 +1844,9 @@ export default function DPCRFTarget() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-blue-900">Department</label>
+            <label htmlFor="dpcrf-department" className="mb-1 block text-xs font-semibold text-blue-900">Department</label>
             <select
+              id="dpcrf-department"
               value={selectedDepartment}
               onChange={(event) => setSelectedDepartment(event.target.value)}
               className="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-blue-900"
@@ -1829,11 +1862,11 @@ export default function DPCRFTarget() {
             <table className="min-w-full text-left text-xs text-blue-900">
               <thead className="bg-blue-100">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Name</th>
-                  <th className="px-3 py-2 font-semibold">Role</th>
-                  <th className="px-3 py-2 font-semibold">Department</th>
-                  <th className="px-3 py-2 font-semibold">Submission</th>
-                  <th className="px-3 py-2 font-semibold text-right">Action</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Name</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Role</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Department</th>
+                  <th scope="col" className="px-3 py-2 font-semibold">Submission</th>
+                  <th scope="col" className="px-3 py-2 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1854,7 +1887,7 @@ export default function DPCRFTarget() {
                       <button
                         type="button"
                         onClick={() => handleAdminViewPerson(person)}
-                        className="rounded-md bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700"
+                        className="min-h-[44px] rounded-md bg-blue-600 px-3 py-1.5 font-semibold text-white hover:bg-blue-700 sm:min-h-0"
                       >
                         View
                       </button>
@@ -1980,7 +2013,7 @@ export default function DPCRFTarget() {
               setPermissionDurationValue(dpcrfPermission.durationValue != null ? String(dpcrfPermission.durationValue) : '');
               setShowPermissionModal(true);
             }}
-            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+            className="min-h-[44px] w-full rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 sm:w-auto sm:min-h-0"
           >
             DPCRF Permission
           </button>
@@ -2019,8 +2052,9 @@ export default function DPCRFTarget() {
       <div className="bg-white border border-blue-200 rounded-lg shadow p-4 md:p-6">
         <div className="mb-4 flex items-center justify-start">
           <div className="w-full sm:w-64">
-            <label className="mb-1 block text-xs font-semibold text-blue-900">Year</label>
+            <label htmlFor="dpcrf-year" className="mb-1 block text-xs font-semibold text-blue-900">Year</label>
             <select
+              id="dpcrf-year"
               value={selectedYear}
               onChange={(event) => {
                 const nextYear = Number.parseInt(event.target.value, 10);
@@ -2046,7 +2080,7 @@ export default function DPCRFTarget() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+              className={`min-h-[44px] px-4 py-2 rounded-md text-sm font-semibold transition sm:min-h-0 ${
                 activeTab === tab.key
                   ? 'bg-blue-600 text-white shadow'
                   : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
@@ -2141,7 +2175,7 @@ export default function DPCRFTarget() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="dpcrf-permission-title"
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="mx-auto w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl bg-white p-4 shadow-xl sm:p-6"
           >
             <h2 id="dpcrf-permission-title" className="text-xl font-bold text-blue-950">
               DPCRF Permission - {selectedYear}
@@ -2164,7 +2198,7 @@ export default function DPCRFTarget() {
             <div className="mt-5 space-y-4">
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">Lock mode</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {[
                     { value: 'manual', label: 'Manual' },
                     { value: 'days', label: 'Days' },
@@ -2175,7 +2209,7 @@ export default function DPCRFTarget() {
                       key={option.value}
                       type="button"
                       onClick={() => setPermissionLockMode(option.value)}
-                      className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                      className={`min-h-[44px] rounded-md border px-3 py-2 text-sm font-semibold sm:min-h-0 ${
                         permissionLockMode === option.value
                           ? 'border-blue-600 bg-blue-50 text-blue-800'
                           : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
@@ -2189,10 +2223,11 @@ export default function DPCRFTarget() {
 
               {permissionLockMode !== 'manual' && (
                 <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  <label htmlFor="dpcrf-permission-duration" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Duration ({permissionLockMode})
                   </label>
                   <input
+                    id="dpcrf-permission-duration"
                     type="number"
                     min="1"
                     step="1"
@@ -2210,7 +2245,7 @@ export default function DPCRFTarget() {
                 type="button"
                 onClick={() => setShowPermissionModal(false)}
                 disabled={permissionSaveLoading}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="min-h-[44px] rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0"
               >
                 Cancel
               </button>
@@ -2218,7 +2253,7 @@ export default function DPCRFTarget() {
                 type="button"
                 onClick={() => handleSetDpcrfPermission(false)}
                 disabled={permissionSaveLoading || !dpcrfPermission.allowUpdate}
-                className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-[44px] rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0"
               >
                 {permissionSaveLoading && dpcrfPermission.allowUpdate ? 'Saving...' : 'Lock Updates'}
               </button>
@@ -2226,7 +2261,7 @@ export default function DPCRFTarget() {
                 type="button"
                 onClick={() => handleSetDpcrfPermission(true)}
                 disabled={permissionSaveLoading || dpcrfPermission.allowUpdate}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-[44px] rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0"
               >
                 {permissionSaveLoading && !dpcrfPermission.allowUpdate ? 'Saving...' : 'Allow Updates'}
               </button>

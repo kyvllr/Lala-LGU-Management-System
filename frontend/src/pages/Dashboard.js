@@ -836,7 +836,7 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
           <button
             type="button"
             onClick={() => setActiveTab('leave-balance')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+            className={`px-4 py-2.5 sm:py-2 rounded-md text-sm font-semibold transition ${
               activeTab === 'leave-balance'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -847,7 +847,7 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
           <button
             type="button"
             onClick={() => setActiveTab('personal-info')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+            className={`px-4 py-2.5 sm:py-2 rounded-md text-sm font-semibold transition ${
               activeTab === 'personal-info'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -861,7 +861,7 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
               setActiveTab('my-pds');
               refreshMyPds();
             }}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+            className={`px-4 py-2.5 sm:py-2 rounded-md text-sm font-semibold transition ${
               activeTab === 'my-pds'
                 ? 'bg-blue-500 text-white shadow-sm'
                 : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -873,7 +873,7 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
             <button
               type="button"
               onClick={() => setActiveTab('analytics')}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+              className={`px-4 py-2.5 sm:py-2 rounded-md text-sm font-semibold transition ${
                 activeTab === 'analytics'
                   ? 'bg-blue-500 text-white shadow-sm'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -889,8 +889,8 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
         <div className="space-y-5">
           <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-100 via-sky-100 to-emerald-100 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-4 sm:gap-6">
-                <div className="h-26 w-26 sm:h-32 sm:w-32 rounded-full bg-blue-500/20 ring-2 ring-blue-300 flex items-center justify-center text-blue-700 font-bold text-2xl sm:text-3xl overflow-hidden flex-shrink-0">
+              <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+              <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-full bg-blue-500/20 ring-2 ring-blue-300 flex items-center justify-center text-blue-700 font-bold text-2xl sm:text-3xl overflow-hidden flex-shrink-0">
                   {profilePhotoDataUrl ? (
                     <img src={profilePhotoDataUrl} alt={`${profileName}'s profile`} className="h-full w-full object-cover" />
                   ) : (
@@ -903,9 +903,9 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
                   )}
                 </div>
                 <div>
-                  <h2 className="text-3xl sm:text-4xl font-extrabold text-blue-900 leading-tight">WELCOME, {profileName.toUpperCase()}!</h2>
-                  <p className="text-blue-800/80 leading-tight">{profileRole}</p>
-                  <p className="text-blue-800/80 leading-tight">{profileDepartment}</p>
+                  <h2 className="text-3xl sm:text-4xl font-extrabold text-blue-900 leading-tight break-words">WELCOME, {profileName.toUpperCase()}!</h2>
+                  <p className="text-blue-800/80 leading-tight break-words">{profileRole}</p>
+                  <p className="text-blue-800/80 leading-tight break-words">{profileDepartment}</p>
                   <div className="inline-flex items-center mt-2 rounded-full bg-blue-800/10 px-3 py-1 text-xs sm:text-sm font-medium text-blue-800">
                     <TbLuggage size={22} />
                     Employee No. {personalInfo.staffId || 'N/A'}
@@ -936,40 +936,44 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
                   <TbWallet size={24} />
                   <span>LEAVE BALANCES</span>
                 </h3>
-                <div className="grid grid-cols-5 text-blue-700 font-semibold text-sm sm:text-base">
-                  <div className="pr-3 border-r border-blue-300">Metric</div>
-                  <div className="px-3 border-r border-blue-300 text-center">Vacation Leave</div>
-                  <div className="px-3 border-r border-blue-300 text-center">Sick Leave</div>
-                  <div className="px-3 border-r border-blue-300 text-center">CTO</div>
-                  <div className="pl-3 text-center">Wellness ({new Date().getFullYear()})</div>
-                </div>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[28rem] sm:min-w-0">
+                    <div className="grid grid-cols-5 text-blue-700 font-semibold text-sm sm:text-base">
+                      <div className="pr-3 border-r border-blue-300">Metric</div>
+                      <div className="px-3 border-r border-blue-300 text-center">Vacation Leave</div>
+                      <div className="px-3 border-r border-blue-300 text-center">Sick Leave</div>
+                      <div className="px-3 border-r border-blue-300 text-center">CTO</div>
+                      <div className="pl-3 text-center">Wellness ({new Date().getFullYear()})</div>
+                    </div>
 
-                <div className="mt-3 grid grid-cols-5 text-sm sm:text-base">
-                  <div className="pr-3 py-1.5 text-blue-700 font-semibold border-r border-blue-200">Total Earned</div>
-                  <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.vacationLeaveEarned)}</div>
-                  <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.sickLeaveEarned)}</div>
-                  <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.ctoEarned)}</div>
-                  <div className="pl-3 py-1.5 text-center text-slate-700">{formatMetricValue(5)}</div>
-                </div>
-                <div className="grid grid-cols-5 text-sm sm:text-base">
-                  <div className="pr-3 py-1.5 text-blue-700 font-semibold border-r border-blue-200">Balance</div>
-                  <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.vacationLeaveBalance)}</div>
-                  <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.sickLeaveBalance)}</div>
-                  <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.ctoBalance)}</div>
-                  <div className="pl-3 py-1.5 text-center font-semibold text-slate-800">{formatMetricValue(leaveBalance.wellnessBalance)}</div>
+                    <div className="mt-3 grid grid-cols-5 text-sm sm:text-base">
+                      <div className="pr-3 py-1.5 text-blue-700 font-semibold border-r border-blue-200">Total Earned</div>
+                      <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.vacationLeaveEarned)}</div>
+                      <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.sickLeaveEarned)}</div>
+                      <div className="px-3 py-1.5 text-center text-slate-700 border-r border-blue-200">{formatMetricValue(leaveBalance.ctoEarned)}</div>
+                      <div className="pl-3 py-1.5 text-center text-slate-700">{formatMetricValue(5)}</div>
+                    </div>
+                    <div className="grid grid-cols-5 text-sm sm:text-base">
+                      <div className="pr-3 py-1.5 text-blue-700 font-semibold border-r border-blue-200">Balance</div>
+                      <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.vacationLeaveBalance)}</div>
+                      <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.sickLeaveBalance)}</div>
+                      <div className="px-3 py-1.5 text-center font-semibold text-slate-800 border-r border-blue-200">{formatMetricValue(leaveBalance.ctoBalance)}</div>
+                      <div className="pl-3 py-1.5 text-center font-semibold text-slate-800">{formatMetricValue(leaveBalance.wellnessBalance)}</div>
+                    </div>
+                  </div>
                 </div>
               </article>
 
               <article className="bg-white rounded-2xl border-2 border-blue-300 p-4 sm:p-5 min-h-[220px]">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-extrabold text-blue-800 flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <h3 className="text-xl font-extrabold text-blue-800 flex items-center gap-2 min-w-0">
                     <TbCalendarEvent size={24} />
                     <span>RECENT LEAVE APPLICATIONS</span>
                   </h3>
                   <button
                     type="button"
                     onClick={() => navigate('/leave?tab=my')}
-                    className="text-blue-500 hover:text-blue-700 font-medium text-sm"
+                    className="inline-flex items-center min-h-[44px] text-blue-500 hover:text-blue-700 font-medium text-sm"
                   >
                     View All
                   </button>
@@ -1181,7 +1185,7 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
                 );
               }}
               disabled={!canOpenPdsForm}
-              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto bg-blue-500 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-blue-600 transition text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {canOpenPdsForm
                 ? (myPds.approvedPds || myPds.latestSubmission ? 'Update My PDS' : 'Submit My PDS')
@@ -1337,13 +1341,13 @@ function Dashboard({ userRole, staffId, userName, profilePhotoDataUrl }) {
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="bg-gray-100">
-                            <th className="border border-gray-300 px-2 py-1 text-left">Level</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">School</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Period</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Honors</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Level</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">School</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Period</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Honors</th>
                           </tr>
                         </thead>
                         <tbody>

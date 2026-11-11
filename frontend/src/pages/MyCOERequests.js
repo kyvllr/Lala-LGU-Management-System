@@ -88,7 +88,7 @@ const MyCOERequests = () => {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow">
+      <div className="max-w-4xl mx-auto mt-10 p-4 sm:p-6 bg-white rounded-lg shadow">
         <p className="text-gray-600">Loading your COE requests...</p>
       </div>
     );
@@ -162,13 +162,13 @@ const MyCOERequests = () => {
 
   return (
     <div className="max-w-4xl mx-auto mt-10 space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
           <h1 className="text-2xl font-bold text-gray-800">My COE Requests</h1>
           <button
             type="button"
             onClick={() => navigate('/request-coe')}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
           >
             <TbPlus size={18} />
             New Request
@@ -181,7 +181,7 @@ const MyCOERequests = () => {
             <button
               key={tab.value}
               onClick={() => setSelectedStatus(tab.value)}
-              className={`px-4 py-2 font-semibold text-sm border-b-2 transition whitespace-nowrap ${
+              className={`px-4 py-2.5 sm:py-2 font-semibold text-sm border-b-2 transition whitespace-nowrap ${
                 selectedStatus === tab.value
                   ? 'border-blue-600 text-blue-600 bg-blue-50'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -204,19 +204,20 @@ const MyCOERequests = () => {
         {/* Search and Filter Section */}
         <div className="mb-6 space-y-4">
           <div className="flex gap-2 items-center flex-wrap">
-            <div className="flex-1 min-w-64 relative">
+            <div className="flex-1 min-w-0 sm:min-w-64 relative">
               <TbSearch className="absolute left-3 top-3 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="Search by ID, purpose, or name..."
+                aria-label="Search requests"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full pl-10 pr-4 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg font-semibold transition whitespace-nowrap ${
                 showFilters
                   ? 'bg-blue-100 text-blue-600 border border-blue-300'
                   : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
@@ -253,10 +254,11 @@ const MyCOERequests = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                  <label htmlFor="coe-filter-date-from" className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
                   <input
+                    id="coe-filter-date-from"
                     type="date"
                     value={filters.dateFrom}
                     onChange={(e) => setFilters({...filters, dateFrom: e.target.value})}
@@ -264,8 +266,9 @@ const MyCOERequests = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                  <label htmlFor="coe-filter-date-to" className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
                   <input
+                    id="coe-filter-date-to"
                     type="date"
                     value={filters.dateTo}
                     onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
@@ -274,10 +277,11 @@ const MyCOERequests = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Min Copies</label>
+                  <label htmlFor="coe-filter-min-copies" className="block text-sm font-semibold text-gray-700 mb-2">Min Copies</label>
                   <input
+                    id="coe-filter-min-copies"
                     type="number"
                     min="1"
                     value={filters.minCopies}
@@ -287,8 +291,9 @@ const MyCOERequests = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Max Copies</label>
+                  <label htmlFor="coe-filter-max-copies" className="block text-sm font-semibold text-gray-700 mb-2">Max Copies</label>
                   <input
+                    id="coe-filter-max-copies"
                     type="number"
                     min="1"
                     value={filters.maxCopies}
@@ -380,7 +385,7 @@ const MyCOERequests = () => {
                           event.stopPropagation();
                           handlePrint(coe);
                         }}
-                        className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                        className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2.5 sm:py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
                       >
                         <TbPrinter size={16} />
                         Print COE
@@ -408,7 +413,7 @@ const MyCOERequests = () => {
                         Download proof of payment: {coe.paymentProof.fileName}
                       </button>
                     )}
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">Full Name:</span>
                         <p className="font-medium text-gray-800">{coe.fullName}</p>
@@ -512,7 +517,7 @@ const MyCOERequests = () => {
                           type="button"
                           onClick={() => handleDelete(coe.coeId)}
                           disabled={deleting === coe.coeId}
-                          className="flex items-center gap-1 bg-red-100 text-red-700 px-3 py-1.5 rounded hover:bg-red-200 transition text-sm disabled:opacity-50"
+                          className="flex items-center gap-1 bg-red-100 text-red-700 px-3 py-2.5 sm:py-1.5 rounded hover:bg-red-200 transition text-sm disabled:opacity-50"
                         >
                           <TbTrash size={14} />
                           {deleting === coe.coeId ? 'Deleting...' : 'Delete'}

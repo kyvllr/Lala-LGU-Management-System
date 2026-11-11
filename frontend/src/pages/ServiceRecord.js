@@ -712,7 +712,7 @@ function ServiceRecord() {
 
   return (
     <div className="mt-6 space-y-5">
-      <h1 className="text-4xl font-bold tracking-tight text-blue-950 mb-6">Service Records</h1>
+      <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-blue-950 mb-6">Service Records</h1>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
@@ -738,15 +738,15 @@ function ServiceRecord() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-x-auto">
             <table className="w-full text-[13px] text-slate-700">
               <thead className="bg-blue-100/80 border-b border-blue-200 text-blue-900">
                 <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Item Number</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Email</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
-                  <th className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Item Number</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Email</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
+                  <th scope="col" className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -766,15 +766,17 @@ function ServiceRecord() {
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleViewStaff(staff.id, staff.name)}
-                            className="p-1.5 text-blue-500 hover:bg-blue-100 rounded transition"
+                            className="p-2.5 text-blue-500 hover:bg-blue-100 rounded transition"
                             title="View records"
+                            aria-label="View records"
                           >
                             <TbEye size={18} />
                           </button>
                           <button
                             onClick={() => handlePrintStaffRecord(staff.id, staff.name)}
-                            className="p-1.5 text-green-500 hover:bg-green-100 rounded transition"
+                            className="p-2.5 text-green-500 hover:bg-green-100 rounded transition"
                             title="Print service record"
+                            aria-label="Print service record"
                           >
                             <TbPrinter size={18} />
                           </button>
@@ -791,7 +793,7 @@ function ServiceRecord() {
       {/* Detail view: Service records for selected staff (Admin) or own records (non-admin) */}
       {(viewingStaffId || (user && !isDepartmentStaffManager(user?.role))) && (
         <div>
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex flex-wrap items-center gap-3 mb-6">
             {isDepartmentStaffManager(user?.role) && viewingStaffId && (
               <button
                 onClick={handleBackToList}
@@ -849,28 +851,28 @@ function ServiceRecord() {
             <table className="w-full text-[13px] text-slate-700">
               <thead className="bg-blue-100/80 text-blue-900">
                 <tr className="border-b border-blue-300">
-                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">SERVICE<br/>(Inclusive Date)</th>
-                  <th colSpan="3" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">RECORD OF APPOINTMENT</th>
-                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">OFFICIAL / DIVISION</th>
-                  <th colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">LEAVE WITHOUT PAY</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">Remarks</th>
+                  <th scope="col" colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">SERVICE<br/>(Inclusive Date)</th>
+                  <th scope="col" colSpan="3" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">RECORD OF APPOINTMENT</th>
+                  <th scope="col" colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">OFFICIAL / DIVISION</th>
+                  <th scope="col" colSpan="2" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">LEAVE WITHOUT PAY</th>
+                  <th scope="col" className="px-3 py-2.5 text-center text-xs font-semibold border-r border-blue-300">Remarks</th>
                   {isDepartmentStaffManager(user?.role) && (
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold">Action</th>
+                    <th scope="col" className="px-3 py-2.5 text-center text-xs font-semibold">Action</th>
                   )}
                 </tr>
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Designation</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Status</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Salary</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r">Station / Place of Assignment | Branch</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Designation</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">Salary</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r">Station / Place of Assignment | Branch</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">From</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300">To</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-semibold border-r border-blue-300"></th>
                   {isDepartmentStaffManager(user?.role) && (
-                    <th className="px-3 py-2 text-center text-xs font-semibold"></th>
+                    <th scope="col" className="px-3 py-2 text-center text-xs font-semibold"></th>
                   )}
                 </tr>
               </thead>
@@ -1029,14 +1031,14 @@ function ServiceRecord() {
                             <td className="px-3 py-2 text-center">
                               <button
                                 onClick={() => handleEditRecord(record)}
-                                className="p-1.5 text-amber-500 hover:bg-amber-100 rounded transition"
+                                className="p-2.5 text-amber-500 hover:bg-amber-100 rounded transition"
                                 title="Edit record"
                               >
                                 <TbEdit size={18} />
                               </button>
                               <button
                                 onClick={() => handleDeleteRecord(record.recordId)}
-                                className="p-1.5 text-red-500 hover:bg-red-100 rounded transition"
+                                className="p-2.5 text-red-500 hover:bg-red-100 rounded transition"
                                 title="Delete record"
                               >
                                 <TbTrash size={18} />
@@ -1190,20 +1192,20 @@ function ServiceRecord() {
 
       {/* Signature Modal */}
       {showSignatureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full mx-4">
-            <h2 className="text-xl font-bold mb-4">E-Signature Option</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="service-record-signature-title" className="bg-white rounded-lg shadow-lg p-4 sm:p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
+            <h2 id="service-record-signature-title" className="text-xl font-bold mb-4">E-Signature Option</h2>
             <p className="text-gray-700 mb-6">Do you want to include Municipal Mayor's e-signature?</p>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={() => handlePrintWithSignature(true)}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
               >
                 Yes
               </button>
               <button
                 onClick={() => handlePrintWithSignature(false)}
-                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
+                className="flex-1 px-4 py-2.5 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
               >
                 No
               </button>

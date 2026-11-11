@@ -48,14 +48,14 @@ function LeaveHub({ staffId, initialTab = 'my' }) {
           <button
             type="button"
             onClick={() => setTab('my')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+            className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             My Leaves
           </button>
           <button
             type="button"
             onClick={() => setTab('file')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'file' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+            className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'file' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             File Leave
           </button>
@@ -68,7 +68,7 @@ function LeaveHub({ staffId, initialTab = 'my' }) {
                 key={item.label}
                 type="button"
                 onClick={() => setStatus(item.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${status === item.key ? 'bg-blue-500 text-white border border-blue-500' : 'bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100'}`}
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-md text-xs font-semibold transition ${status === item.key ? 'bg-blue-500 text-white border border-blue-500' : 'bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100'}`}
               >
                 {item.label}
               </button>

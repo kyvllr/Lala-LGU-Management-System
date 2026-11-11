@@ -739,12 +739,12 @@ export default function JobPortal() {
             <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
                 <tr className="bg-blue-50 text-left text-blue-950">
-                  <th className="border border-blue-100 px-3 py-2">Applicant</th>
-                  <th className="border border-blue-100 px-3 py-2">Position</th>
-                  <th className="border border-blue-100 px-3 py-2">Place of Assignment</th>
-                  <th className="border border-blue-100 px-3 py-2">PDS Review</th>
-                  <th className="border border-blue-100 px-3 py-2">Application Status</th>
-                  <th className="border border-blue-100 px-3 py-2">Actions</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">Applicant</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">Position</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">Place of Assignment</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">PDS Review</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">Application Status</th>
+                  <th scope="col" className="border border-blue-100 px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -785,11 +785,11 @@ export default function JobPortal() {
       )}
 
       {selectedApplication && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="job-application-details-title-main">
+          <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-4 sm:p-6 shadow-xl">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-bold text-blue-950">Job Application Details</h2>
+                <h2 id="job-application-details-title-main" className="text-xl font-bold text-blue-950">Job Application Details</h2>
                 <p className="text-sm text-slate-500">PDS ID: {selectedApplication.pdsId}</p>
               </div>
               <button type="button" onClick={() => setSelectedApplication(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close</button>
@@ -842,7 +842,7 @@ export default function JobPortal() {
 
       {viewApplication && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="job-application-details-title">
-          <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+          <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-4 sm:p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 id="job-application-details-title" className="text-xl font-bold text-blue-950">Job Application</h2>

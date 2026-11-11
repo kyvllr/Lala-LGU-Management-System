@@ -458,7 +458,7 @@ function StaffList() {
   if (loading) return <div className="text-center p-8 text-blue-700 font-medium">Loading...</div>;
   return (
     <div className="mt-6 space-y-5">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-4xl font-bold tracking-tight text-blue-950">Staff Management</h1>
         <button
           onClick={() => setShowAddModal(true)}
@@ -612,7 +612,7 @@ function StaffList() {
 
       <section className="rounded-lg border border-blue-100 bg-white p-4 shadow-sm">
         <h2 className="mb-4 text-xl font-bold text-blue-950">Staff Summary Report</h2>
-        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             { label: 'Active Staff', value: reportStaff.length },
             { label: 'Average Age', value: averageAge === null ? 'N/A' : `${averageAge} years` },
@@ -699,11 +699,11 @@ function StaffList() {
               <table className="w-full text-[13px] text-slate-700">
                 <thead className="sticky top-0 z-10 border-b border-blue-200 bg-blue-100/95 text-blue-900">
                   <tr>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Item Number</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Name</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Department</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">Status</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold">View</th>
+                    <th scope="col" className="px-3 py-2.5 text-left text-xs font-semibold">Item Number</th>
+                    <th scope="col" className="px-3 py-2.5 text-left text-xs font-semibold">Name</th>
+                    <th scope="col" className="px-3 py-2.5 text-left text-xs font-semibold">Department</th>
+                    <th scope="col" className="px-3 py-2.5 text-left text-xs font-semibold">Status</th>
+                    <th scope="col" className="px-3 py-2.5 text-left text-xs font-semibold">View</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -845,13 +845,13 @@ function StaffList() {
       {/* Edit Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-slate-900/45 flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-          <div className="bg-white p-6 rounded-xl border border-blue-100 shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
-            <h2 className="text-2xl font-bold tracking-tight text-blue-950 mb-4">Update Staff Information</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-staff-modal-title" className="bg-white p-4 sm:p-6 rounded-xl border border-blue-100 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 id="edit-staff-modal-title" className="text-2xl font-bold tracking-tight text-blue-950 mb-4">Update Staff Information</h2>
 
             {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">{error}</div>}
 
-            <form className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 flex items-center gap-4">
+            <form className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2 flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-blue-100 border border-blue-200 overflow-hidden flex items-center justify-center text-blue-700 flex-shrink-0">
                   {editFormData.profilePhotoDataUrl ? (
                     <img src={editFormData.profilePhotoDataUrl} alt="Profile preview" className="w-full h-full object-cover" />
@@ -1104,7 +1104,7 @@ function StaffList() {
                 </select>
               </div>
 
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-blue-900 mb-1.5">Address</label>
                 <input
                   type="text"
@@ -1203,11 +1203,11 @@ function StaffList() {
                 />
               </div>
 
-              <div className="col-span-2 flex gap-2 pt-3">
+              <div className="sm:col-span-2 flex flex-wrap gap-2 pt-3">
                 <button
                   type="button"
                   onClick={handleSaveEdit}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 text-sm font-semibold"
+                  className="flex-1 bg-blue-600 text-white py-2.5 sm:py-2 rounded-md hover:bg-blue-700 text-sm font-semibold"
                 >
                   Save
                 </button>
@@ -1231,12 +1231,12 @@ function StaffList() {
       {/* Add Staff Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/45 flex items-center justify-center z-50 p-4 backdrop-blur-[1px]">
-          <div className="bg-white p-6 rounded-xl border border-blue-100 shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
-            <h2 className="text-2xl font-bold tracking-tight text-blue-950 mb-4">Add New Staff</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="add-staff-modal-title" className="bg-white p-4 sm:p-6 rounded-xl border border-blue-100 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 id="add-staff-modal-title" className="text-2xl font-bold tracking-tight text-blue-950 mb-4">Add New Staff</h2>
 
             {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">{error}</div>}
 
-            <form className="grid grid-cols-2 gap-3">
+            <form className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-semibold text-blue-900 mb-1.5">Item Number *</label>
                 <input
@@ -1482,11 +1482,11 @@ function StaffList() {
                 </select>
               </div>
 
-              <div className="col-span-2 flex gap-2 pt-3">
+              <div className="sm:col-span-2 flex flex-wrap gap-2 pt-3">
                 <button
                   type="button"
                   onClick={handleAddStaff}
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 text-sm font-semibold"
+                  className="flex-1 bg-blue-600 text-white py-2.5 sm:py-2 rounded-md hover:bg-blue-700 text-sm font-semibold"
                 >
                   Add Staff
                 </button>

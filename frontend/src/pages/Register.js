@@ -163,14 +163,14 @@ export default function Register() {
           backgroundAttachment: 'fixed',
         }}
       >
-        <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md text-center relative" style={{ opacity: 0.85 }}>
+        <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8 w-full max-w-md text-center relative" style={{ opacity: 0.85 }}>
           <div className="mb-6">
             <div className="inline-block bg-green-100 text-green-600 rounded-full p-4 mb-4">
               <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Account Created!</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Account Created!</h1>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
@@ -197,13 +197,13 @@ export default function Register() {
           <div className="space-y-3">
             <button
               onClick={() => navigate('/login')}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+              className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition"
             >
               Go to Login
             </button>
             <button
               onClick={() => navigate('/register')}
-              className="w-full bg-gray-300 text-gray-800 py-2 rounded-lg font-medium hover:bg-gray-400 transition"
+              className="w-full bg-gray-300 text-gray-800 py-2.5 rounded-lg font-medium hover:bg-gray-400 transition"
             >
               Register Another Account
             </button>
@@ -227,14 +227,14 @@ export default function Register() {
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl relative" style={{ opacity: 0.95 }}>
+      <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 w-full max-w-5xl relative" style={{ opacity: 0.95 }}>
         <div className="text-center mb-8">
           <img 
             src="/logo.PNG" 
             alt="LALA LGU Logo" 
             className="w-20 h-20 mx-auto mb-4 object-contain"
           />
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Create Account</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Create Account</h1>
           <p className="text-1xl text-gray-400">Register as a new staff member</p>
         </div>
 
@@ -255,11 +255,12 @@ export default function Register() {
             <h2 className="text-lg font-semibold text-blue-900 mb-4">Personal Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-staffId">
               Item Number *
             </label>
             <input
               type="text"
+              id="register-staffId"
               name="staffId"
               value={formData.staffId}
               onChange={handleChange}
@@ -271,11 +272,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-firstName">
               First Name *
             </label>
             <input
               type="text"
+              id="register-firstName"
               name="firstName"
               value={formData.firstName}
               onChange={handleChange}
@@ -287,11 +289,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-middleName">
               Middle Name
             </label>
             <input
               type="text"
+              id="register-middleName"
               name="middleName"
               value={formData.middleName}
               onChange={handleChange}
@@ -302,11 +305,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-lastName">
               Last Name *
             </label>
             <input
               type="text"
+              id="register-lastName"
               name="lastName"
               value={formData.lastName}
               onChange={handleChange}
@@ -318,11 +322,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-email">
               Email Address *
             </label>
             <input
               type="email"
+              id="register-email"
               name="email"
               value={formData.email}
               onChange={handleChange}
@@ -334,11 +339,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-phone">
               Phone Number
             </label>
             <input
               type="tel"
+              id="register-phone"
               name="phone"
               value={formData.phone}
               onChange={handleChange}
@@ -349,11 +355,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-dateOfBirth">
               Date of Birth
             </label>
             <input
               type="date"
+              id="register-dateOfBirth"
               name="dateOfBirth"
               value={formData.dateOfBirth}
               onChange={handleChange}
@@ -363,11 +370,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-placeOfBirth">
               Place of Birth
             </label>
             <input
               type="text"
+              id="register-placeOfBirth"
               name="placeOfBirth"
               value={formData.placeOfBirth}
               onChange={handleChange}
@@ -378,11 +386,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-tinNumber">
               TIN #
             </label>
             <input
               type="text"
+              id="register-tinNumber"
               name="tinNumber"
               value={formData.tinNumber}
               onChange={handleChange}
@@ -393,9 +402,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Business Partner Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-businessPartnerNumber">Business Partner Number</label>
             <input
               type="text"
+              id="register-businessPartnerNumber"
               name="businessPartnerNumber"
               value={formData.businessPartnerNumber}
               onChange={handleChange}
@@ -405,9 +415,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">PhilHealth Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-philhealthNo">PhilHealth Number</label>
             <input
               type="text"
+              id="register-philhealthNo"
               name="philhealthNo"
               value={formData.philhealthNo}
               onChange={handleChange}
@@ -417,9 +428,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-pagibigNo">Pag-IBIG Number</label>
             <input
               type="text"
+              id="register-pagibigNo"
               name="pagibigNo"
               value={formData.pagibigNo}
               onChange={handleChange}
@@ -429,8 +441,9 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-maritalStatus">Marital Status</label>
             <select
+              id="register-maritalStatus"
               name="maritalStatus"
               value={formData.maritalStatus}
               onChange={handleChange}
@@ -447,9 +460,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-address">Address</label>
             <input
               type="text"
+              id="register-address"
               name="address"
               value={formData.address}
               onChange={handleChange}
@@ -465,11 +479,12 @@ export default function Register() {
             <h2 className="text-lg font-semibold text-blue-900 mb-4">Employment Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-role">
                   Role *
                 </label>
                 {rolesAndDepartments ? (
                   <select
+                    id="register-role"
                     name="role"
                     value={formData.role}
                     onChange={handleChange}
@@ -495,9 +510,10 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-position">Position</label>
                 <input
                   type="text"
+                  id="register-position"
                   name="position"
                   value={formData.position}
                   onChange={handleChange}
@@ -508,9 +524,10 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Employment</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-dateHired">Date of Employment</label>
                 <input
                   type="date"
+                  id="register-dateHired"
                   name="dateHired"
                   value={formData.dateHired}
                   onChange={handleChange}
@@ -521,8 +538,9 @@ export default function Register() {
 
               {rolesAndDepartments?.roles?.[formData.role]?.requiresDepartment && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-department">Department *</label>
                   <select
+                    id="register-department"
                     name="department"
                     value={formData.department}
                     onChange={handleChange}
@@ -539,9 +557,10 @@ export default function Register() {
               )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status of Employment</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-employmentStatus">Status of Employment</label>
             <input
               type="text"
+              id="register-employmentStatus"
               name="employmentStatus"
               value={formData.employmentStatus}
               onChange={handleChange}
@@ -551,9 +570,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Length of Service</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-lengthOfService">Length of Service</label>
             <input
               type="text"
+              id="register-lengthOfService"
               name="lengthOfService"
               value={formData.lengthOfService}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -563,11 +583,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Basic Salary</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-monthlyBasicSalary">Monthly Basic Salary</label>
             <input
               type="number"
               min="0"
               step="0.01"
+              id="register-monthlyBasicSalary"
               name="monthlyBasicSalary"
               value={formData.monthlyBasicSalary}
               onChange={handleChange}
@@ -577,9 +598,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">PERA/RATA</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-peraRata">PERA/RATA</label>
             <input
               type="text"
+              id="register-peraRata"
               name="peraRata"
               value={formData.peraRata}
               onChange={handleChange}
@@ -589,11 +611,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Gross Salary</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-grossSalary">Gross Salary</label>
             <input
               type="number"
               min="0"
               step="0.01"
+              id="register-grossSalary"
               name="grossSalary"
               value={formData.grossSalary}
               onChange={handleChange}
@@ -603,8 +626,9 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pending Administrative Case</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-pendingAdministrativeCase">Pending Administrative Case</label>
             <select
+              id="register-pendingAdministrativeCase"
               name="pendingAdministrativeCase"
               value={formData.pendingAdministrativeCase}
               onChange={handleChange}
@@ -618,8 +642,9 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pending Criminal Case</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-pendingCriminalCase">Pending Criminal Case</label>
             <select
+              id="register-pendingCriminalCase"
               name="pendingCriminalCase"
               value={formData.pendingCriminalCase}
               onChange={handleChange}
@@ -633,9 +658,10 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Salary Grade</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-salaryGrade">Salary Grade</label>
             <input
               type="text"
+              id="register-salaryGrade"
               name="salaryGrade"
               value={formData.salaryGrade}
               onChange={handleChange}
@@ -651,11 +677,12 @@ export default function Register() {
             <h2 className="text-lg font-semibold text-blue-900 mb-4">Account Credentials</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-password">
               Password *
             </label>
             <input
               type="password"
+              id="register-password"
               name="password"
               value={formData.password}
               onChange={handleChange}
@@ -667,11 +694,12 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="register-confirmPassword">
               Confirm Password *
             </label>
             <input
               type="password"
+              id="register-confirmPassword"
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}

@@ -213,13 +213,13 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-200">
-                <th className="border border-gray-300 px-4 py-2 text-left">Item Number</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Name</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Email</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Position</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Department</th>
-                <th className="border border-gray-300 px-4 py-2 text-left">Registered</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Actions</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Item Number</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Name</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Email</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Position</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Department</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-left">Registered</th>
+                <th scope="col" className="border border-gray-300 px-4 py-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -237,21 +237,21 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                     <button
                       type="button"
                       onClick={() => setViewingStaff(staff)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
+                      className="bg-blue-600 text-white px-3 py-2.5 sm:py-1 rounded hover:bg-blue-700 transition"
                     >
                       View
                     </button>
                     <button
                       onClick={() => handleApprove(staff.id)}
                       disabled={approving === staff.id}
-                      className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition disabled:opacity-50"
+                      className="bg-green-500 text-white px-3 py-2.5 sm:py-1 rounded hover:bg-green-600 transition disabled:opacity-50"
                     >
                       {approving === staff.id ? 'Approving...' : 'Approve'}
                     </button>
                     <button
                       onClick={() => handleDisapprove(staff.id)}
                       disabled={disapproving === staff.id}
-                      className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition disabled:opacity-50"
+                      className="bg-red-500 text-white px-3 py-2.5 sm:py-1 rounded hover:bg-red-600 transition disabled:opacity-50"
                     >
                       {disapproving === staff.id ? 'Disapproving...' : 'Disapprove'}
                     </button>
@@ -302,7 +302,7 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                               type="button"
                               onClick={() => setSelectedProfileRequestId(request.requestId)}
                               aria-pressed={isSelected}
-                              className={`shrink-0 rounded px-3 py-1 text-sm font-medium transition ${
+                              className={`shrink-0 rounded px-3 py-2.5 sm:py-1 text-sm font-medium transition ${
                                 isSelected
                                   ? 'bg-blue-100 text-blue-700'
                                   : 'bg-blue-600 text-white hover:bg-blue-700'
@@ -340,7 +340,7 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                         <button
                           type="button"
                           onClick={() => setSelectedProfileRequestId(null)}
-                          className="rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                          className="rounded border border-gray-300 bg-white px-3 py-2.5 sm:py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
                         >
                           Hide
                         </button>
@@ -348,7 +348,7 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                           type="button"
                           onClick={() => handleProfileRequestReview(selectedProfileRequest.requestId, 'Approved')}
                           disabled={reviewingProfileRequest === selectedProfileRequest.requestId}
-                          className="rounded bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                          className="rounded bg-green-600 px-3 py-2.5 sm:py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                         >
                           {reviewingProfileRequest === selectedProfileRequest.requestId ? 'Reviewing...' : 'Approve'}
                         </button>
@@ -356,7 +356,7 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                           type="button"
                           onClick={() => handleProfileRequestReview(selectedProfileRequest.requestId, 'Rejected')}
                           disabled={reviewingProfileRequest === selectedProfileRequest.requestId}
-                          className="rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                          className="rounded bg-red-600 px-3 py-2.5 sm:py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -366,9 +366,9 @@ export default function ApprovePendingStaff({ canReviewProfileRequests = false }
                       <table className="w-full border-collapse text-sm">
                         <thead>
                           <tr className="bg-gray-100 text-left">
-                            <th className="border border-gray-200 px-3 py-2">Field</th>
-                            <th className="border border-gray-200 px-3 py-2">Current</th>
-                            <th className="border border-gray-200 px-3 py-2">Requested</th>
+                            <th scope="col" className="border border-gray-200 px-3 py-2">Field</th>
+                            <th scope="col" className="border border-gray-200 px-3 py-2">Current</th>
+                            <th scope="col" className="border border-gray-200 px-3 py-2">Requested</th>
                           </tr>
                         </thead>
                         <tbody>

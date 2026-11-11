@@ -1132,17 +1132,17 @@ function StaffLeaveRecordDetail() {
 
   return (
     <div className="mt-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-3xl font-bold">Leave Record</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handleExportCsv}
-            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
+            className="px-4 py-2.5 sm:py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition"
             title="Export CSV"
           >
             Export CSV
           </button>
-          <label className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition cursor-pointer">
+          <label className="px-4 py-2.5 sm:py-2 bg-green-500 text-white rounded hover:bg-green-600 transition cursor-pointer">
             Import CSV
             <input type="file" accept=".csv" onChange={handleImportCsv} style={{ display: 'none' }} />
           </label>
@@ -1167,7 +1167,7 @@ function StaffLeaveRecordDetail() {
       {successMessage && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{successMessage}</div>}
 
       {/* Leave Balance Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-blue-50 p-4 rounded border border-blue-200">
           <p className="text-sm text-gray-600 mb-1">Vacation Leave Balance</p>
           <p className="text-2xl font-bold text-blue-600">{formatAmount(leaveBalance.vacationLeaveBalance)}</p>
@@ -1183,11 +1183,11 @@ function StaffLeaveRecordDetail() {
       </div>
 
       <div className="mb-6 border-b border-gray-300">
-        <div className="flex gap-6">
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
           <button
             type="button"
             onClick={() => setActiveTab('records')}
-            className={`pb-2 font-semibold border-b-2 transition ${
+            className={`pb-2.5 sm:pb-2 font-semibold border-b-2 transition ${
               activeTab === 'records'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-600 hover:text-gray-800'
@@ -1198,7 +1198,7 @@ function StaffLeaveRecordDetail() {
           <button
             type="button"
             onClick={() => setActiveTab('summary')}
-            className={`pb-2 font-semibold border-b-2 transition ${
+            className={`pb-2.5 sm:pb-2 font-semibold border-b-2 transition ${
               activeTab === 'summary'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-600 hover:text-gray-800'
@@ -1216,18 +1216,18 @@ function StaffLeaveRecordDetail() {
           <table className="w-full">
             <thead className="bg-blue-100 border-b">
               <tr>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Period From</th>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Period To</th>
-                <th className="px-6 py-3 text-left font-bold text-gray-700">Particulars</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">No. of Days</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">VL Earned</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">VL ABSENT/UNDERTIME/ WITH PAY</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">SL Earned</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT/UNDERTIME/ WITH PAY</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">CTO</th>
-                <th className="px-6 py-3 text-center font-bold text-gray-700">Wellness Leave</th>
+                <th scope="col" className="px-6 py-3 text-left font-bold text-gray-700">Period From</th>
+                <th scope="col" className="px-6 py-3 text-left font-bold text-gray-700">Period To</th>
+                <th scope="col" className="px-6 py-3 text-left font-bold text-gray-700">Particulars</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">No. of Days</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">VL Earned</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">VL ABSENT/UNDERTIME/ WITH PAY</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">SL Earned</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">SL ABSENT/UNDERTIME/ WITH PAY</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">CTO</th>
+                <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">Wellness Leave</th>
                 {user && isDepartmentStaffManager(user.role) && (
-                  <th className="px-6 py-3 text-center font-bold text-gray-700">Actions</th>
+                  <th scope="col" className="px-6 py-3 text-center font-bold text-gray-700">Actions</th>
                 )}
               </tr>
             </thead>
@@ -1273,15 +1273,17 @@ function StaffLeaveRecordDetail() {
                     <td className="px-6 py-4 text-center flex gap-2 justify-center">
                       <button
                         onClick={() => handleEditLeave(record)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded transition"
+                        className="p-2.5 sm:p-2 text-blue-600 hover:bg-blue-100 rounded transition"
                         title="Edit"
+                        aria-label="Edit leave record"
                       >
                         <TbEdit size={18} />
                       </button>
                       <button
                         onClick={() => handleDeleteLeave(record.recordId || record.id)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded transition"
+                        className="p-2.5 sm:p-2 text-red-600 hover:bg-red-100 rounded transition"
                         title="Delete"
+                        aria-label="Delete leave record"
                       >
                         <TbTrash size={18} />
                       </button>
@@ -1403,13 +1405,13 @@ function StaffLeaveRecordDetail() {
                   <td className="px-6 py-2 text-center flex gap-2 justify-center">
                     <button
                       onClick={handleSaveNewRecord}
-                      className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                      className="px-3 py-2.5 sm:py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
                     >
                       Save
                     </button>
                     <button
                       onClick={handleCancelNewRecord}
-                      className="px-3 py-1 bg-gray-400 text-white rounded text-sm hover:bg-gray-500"
+                      className="px-3 py-2.5 sm:py-1 bg-gray-400 text-white rounded text-sm hover:bg-gray-500"
                     >
                       Cancel
                     </button>
@@ -1436,7 +1438,7 @@ function StaffLeaveRecordDetail() {
       {/* Leave Record Summary Table (Reference from image) */}
       {activeTab === 'summary' && (
         <div className="mt-2">
-          <div className="flex justify-between items-center mb-2">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-2">
             <h2 className="text-xl font-bold">Leave Summary</h2>
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -1467,20 +1469,20 @@ function StaffLeaveRecordDetail() {
             <table className="w-full border-collapse print-table">
               <thead>
                 <tr className="bg-gray-200 border">
-                  <th colSpan="2" className="px-4 py-2 border text-center font-bold">PERIOD</th>
-                  <th rowSpan="2" className="px-4 py-2 border text-left font-bold">PARTICULARS</th>
-                  <th colSpan="3" className="px-4 py-2 border text-center font-bold">VACATION LEAVE</th>
-                  <th colSpan="3" className="px-4 py-2 border text-center font-bold">SICK LEAVE</th>
+                  <th scope="col" colSpan="2" className="px-4 py-2 border text-center font-bold">PERIOD</th>
+                  <th scope="col" rowSpan="2" className="px-4 py-2 border text-left font-bold">PARTICULARS</th>
+                  <th scope="col" colSpan="3" className="px-4 py-2 border text-center font-bold">VACATION LEAVE</th>
+                  <th scope="col" colSpan="3" className="px-4 py-2 border text-center font-bold">SICK LEAVE</th>
                 </tr>
                 <tr className="bg-gray-200 border">
-                  <th className="px-4 py-2 border text-center font-bold">FROM</th>
-                  <th className="px-4 py-2 border text-center font-bold">TO</th>
-                  <th className="px-4 py-2 border text-center font-bold">EARNED</th>
-                  <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
-                  <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
-                  <th className="px-4 py-2 border text-center font-bold">EARNED</th>
-                  <th className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
-                  <th className="px-4 py-2 border text-center font-bold">BALANCE</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">FROM</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">TO</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">EARNED</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">BALANCE</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">EARNED</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">ABSENT UNDERTIME W/PAY</th>
+                  <th scope="col" className="px-4 py-2 border text-center font-bold">BALANCE</th>
                 </tr>
               </thead>
               <tbody>
@@ -1614,9 +1616,14 @@ function StaffLeaveRecordDetail() {
 
       {/* Edit Leave Record Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-96 max-h-96 overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Edit Leave Record</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-leave-record-title"
+            className="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+          >
+            <h2 id="edit-leave-record-title" className="text-xl font-bold mb-4">Edit Leave Record</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Period (from, to)</label>
@@ -1644,8 +1651,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">Particulars</label>
+                <label htmlFor="edit-particulars" className="block text-sm font-semibold mb-1">Particulars</label>
                 <select
+                  id="edit-particulars"
                   name="particulars"
                   value={editRecordData.particulars}
                   onChange={handleEditRecordChange}
@@ -1660,8 +1668,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">VL Earned</label>
+                <label htmlFor="edit-vl-earned" className="block text-sm font-semibold mb-1">VL Earned</label>
                 <input
+                  id="edit-vl-earned"
                   type="number"
                   step="0.01"
                   min="0"
@@ -1673,8 +1682,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">VL ABSENT/UNDERTIME/ WITH PAY</label>
+                <label htmlFor="edit-vl-absent" className="block text-sm font-semibold mb-1">VL ABSENT/UNDERTIME/ WITH PAY</label>
                 <input
+                  id="edit-vl-absent"
                   type="number"
                   step="any"
                   name="vlAbsentUndertimeWPay"
@@ -1685,8 +1695,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">SL Earned</label>
+                <label htmlFor="edit-sl-earned" className="block text-sm font-semibold mb-1">SL Earned</label>
                 <input
+                  id="edit-sl-earned"
                   type="number"
                   step="0.01"
                   min="0"
@@ -1698,8 +1709,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">SL Absent W/PAY</label>
+                <label htmlFor="edit-sl-absent" className="block text-sm font-semibold mb-1">SL Absent W/PAY</label>
                 <input
+                  id="edit-sl-absent"
                   type="number"
                   step="any"
                   name="slAbsentUndertimeWPay"
@@ -1710,8 +1722,9 @@ function StaffLeaveRecordDetail() {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">CTO</label>
+                <label htmlFor="edit-cto" className="block text-sm font-semibold mb-1">CTO</label>
                 <input
+                  id="edit-cto"
                   type="number"
                   step="0.01"
                   name="cto"
@@ -1725,13 +1738,13 @@ function StaffLeaveRecordDetail() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleSaveEditRecord}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                className="flex-1 px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
               >
                 Update
               </button>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition"
+                className="flex-1 px-4 py-2.5 sm:py-2 bg-gray-400 text-white rounded hover:bg-gray-500 transition"
               >
                 Cancel
               </button>

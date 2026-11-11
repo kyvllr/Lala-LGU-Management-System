@@ -76,9 +76,9 @@ function ApproveNoPendencyRequests({ forcedStatus = 'Pending' }) {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-800">Certificate of No Pending Case Requests ({filteredRequests.length})</h2>
-        <button type="button" onClick={fetchRequests} className="rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="min-w-0 break-words text-xl font-bold text-slate-800">Certificate of No Pending Case Requests ({filteredRequests.length})</h2>
+        <button type="button" onClick={fetchRequests} className="rounded-md bg-slate-100 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 sm:py-2">
           Refresh
         </button>
       </div>
@@ -104,15 +104,15 @@ function ApproveNoPendencyRequests({ forcedStatus = 'Pending' }) {
         <article key={request.requestId} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h3 className="font-semibold text-slate-900">{request.staffName || request.fullName}</h3>
-              <p className="text-sm text-slate-600">{request.staffId} · {request.staffDepartment || 'No department listed'}</p>
+              <h3 className="break-words font-semibold text-slate-900">{request.staffName || request.fullName}</h3>
+              <p className="break-words text-sm text-slate-600">{request.staffId} · {request.staffDepartment || 'No department listed'}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {request.status === 'Approved' && (
                 <button
                   type="button"
                   onClick={() => handlePrint(request)}
-                  className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 sm:py-1.5"
                 >
                   <TbPrinter size={16} />
                   Print Certificate
@@ -138,7 +138,7 @@ function ApproveNoPendencyRequests({ forcedStatus = 'Pending' }) {
                   setError(proofError.response?.data?.message || 'Unable to download proof of payment.');
                 }
               }}
-              className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+              className="mt-3 max-w-full break-all rounded-md bg-blue-50 px-3 py-2.5 text-left text-sm font-semibold text-blue-700 hover:bg-blue-100 sm:py-2"
             >
               Download proof of payment: {request.paymentProof.fileName}
             </button>
@@ -155,12 +155,12 @@ function ApproveNoPendencyRequests({ forcedStatus = 'Pending' }) {
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-normal"
                 />
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => reviewRequest(request, 'approve')}
                   disabled={processingId === request.requestId}
-                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  className="rounded-md bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 sm:py-2"
                 >
                   {processingId === request.requestId ? 'Processing...' : 'Approve'}
                 </button>
@@ -168,7 +168,7 @@ function ApproveNoPendencyRequests({ forcedStatus = 'Pending' }) {
                   type="button"
                   onClick={() => reviewRequest(request, 'disapprove')}
                   disabled={processingId === request.requestId}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  className="rounded-md bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 sm:py-2"
                 >
                   Disapprove
                 </button>

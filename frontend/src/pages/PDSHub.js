@@ -125,7 +125,7 @@ export default function PDSHub() {
 
   return (
     <div className="w-full mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">PDS</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">PDS</h1>
 
       <div className="mb-6 border-b border-gray-200">
         <nav className="flex flex-wrap gap-2 pb-3" aria-label="PDS tabs">
@@ -184,7 +184,7 @@ export default function PDSHub() {
       </div>
 
       {activeTab === 'my' && (
-        <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-4">
           {!loading && !error && hasPdsRecord && (
             <div className="flex justify-end">
               <button
@@ -357,13 +357,13 @@ export default function PDSHub() {
                       <table className="w-full border-collapse">
                         <thead>
                           <tr className="bg-gray-100">
-                            <th className="border border-gray-300 px-2 py-1 text-left">Level</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">School</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Period</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
-                            <th className="border border-gray-300 px-2 py-1 text-left">Honors</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Level</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">School</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Period</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
+                            <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Honors</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -479,7 +479,7 @@ export default function PDSHub() {
       )}
 
       {activeTab === 'submit' && (
-        <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-4">
           <h2 className="text-xl font-bold text-gray-800">Submit PDS</h2>
           <p className="text-gray-600">Open the Personal Data Sheet form and submit your latest details for admin review.</p>
           {hasApprovedPds && !approvedUpdateAllowed && (

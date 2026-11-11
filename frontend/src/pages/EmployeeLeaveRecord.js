@@ -110,8 +110,9 @@ function EmployeeLeaveRecord() {
       {/* Search Bar */}
       <div className="mb-6 bg-blue-50/70 border border-blue-100 p-4 rounded-lg shadow-sm">
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-blue-800">Search Staff</label>
+          <label htmlFor="employee-leave-search" className="text-xs font-semibold uppercase tracking-wide text-blue-800">Search Staff</label>
           <input
+            id="employee-leave-search"
             type="text"
             placeholder="Search by name, employee ID, or position..."
             value={searchQuery}
@@ -131,11 +132,11 @@ function EmployeeLeaveRecord() {
           <table className="w-full text-[13px] text-slate-700">
             <thead className="bg-blue-100/80 border-b border-blue-200 text-blue-900">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold">Employee ID</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold">Department</th>
-                <th className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
+                <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Employee ID</th>
+                <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Name</th>
+                <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Position</th>
+                <th scope="col" className="px-4 py-2.5 text-left text-xs font-semibold">Department</th>
+                <th scope="col" className="px-4 py-2.5 text-center text-xs font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -147,8 +148,9 @@ function EmployeeLeaveRecord() {
                   <td className="px-4 py-2.5 text-slate-800">{staff.department || 'N/A'}</td>
                   <td className="px-4 py-2.5 text-center">
                     <button
+                      type="button"
                       onClick={() => handleViewLeaveRecord(staff.id, staff.name)}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                      className="inline-flex items-center gap-2 px-3 py-2.5 sm:py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
                       title="View Leave Record"
                     >
                       <TbEye size={16} />
@@ -167,7 +169,7 @@ function EmployeeLeaveRecord() {
         <div className="mt-6 flex items-center gap-4">
           <button
             onClick={() => setRecordsToShow(recordsToShow + 10)}
-            className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            className="px-4 py-2.5 sm:py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
           >
             Load More
           </button>

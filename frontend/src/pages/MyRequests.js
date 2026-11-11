@@ -124,7 +124,7 @@ function MyRequests() {
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             ['Total requests', counts.total, 'text-blue-950'],
             ['Pending review', counts.pending, 'text-blue-700'],
@@ -184,7 +184,7 @@ function MyRequests() {
       )}
 
       <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-blue-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 px-4 py-3">
           <h2 className="font-semibold text-blue-950">Request history</h2>
           <span className="text-sm text-slate-500">{filteredRequests.length} request(s)</span>
         </div>
@@ -213,11 +213,11 @@ function MyRequests() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-blue-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Request</th>
-                  <th className="px-4 py-3">Submitted</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Current step</th>
-                  <th className="px-4 py-3">Latest update</th>
+                  <th scope="col" className="px-4 py-3">Request</th>
+                  <th scope="col" className="px-4 py-3">Submitted</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Current step</th>
+                  <th scope="col" className="px-4 py-3">Latest update</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

@@ -69,14 +69,14 @@ export default function Login({ setUser }) {
         <FiArrowLeft aria-hidden="true" />
         Back to home
       </Link>
-      <div className="bg-white rounded-lg p-8 w-full max-w-md backdrop-blur-sm" style={{ opacity: 0.85 }}>
+      <div className="bg-white rounded-lg p-6 sm:p-8 w-full max-w-md backdrop-blur-sm" style={{ opacity: 0.85 }}>
         <div className="text-center mb-8">
           <img 
             src="/logo.PNG" 
             alt="LALA LGU Logo" 
-            className="w-24 h-24 mx-auto mb-4 object-contain"
+            className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 object-contain"
           />
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">HR Information System</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">HR Information System</h1>
           <p className="text-gray-600">Login to your account</p>
         </div>
 
@@ -88,36 +88,38 @@ export default function Login({ setUser }) {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
               Email Address
             </label>
             <input
               type="email"
+              id="login-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={loading}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 pr-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={loading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                className="absolute inset-y-0 right-0 flex items-center px-3 min-h-[44px] text-gray-500 hover:text-gray-700"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 disabled={loading}
               >
@@ -129,7 +131,7 @@ export default function Login({ setUser }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>

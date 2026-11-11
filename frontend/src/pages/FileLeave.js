@@ -634,12 +634,12 @@ function FileLeave({ staffId }) {
       {success && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">{success}</div>}
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg border border-blue-100 shadow-sm space-y-6 xl:col-span-8">
+      <form onSubmit={handleSubmit} className="min-w-0 bg-white p-4 sm:p-8 rounded-lg border border-blue-100 shadow-sm space-y-6 xl:col-span-8">
         {/* Section 1: Personal Information */}
         <div className="border-b border-blue-100 pb-6">
           <h2 className="text-xl font-bold text-blue-950 mb-4">Personal Information</h2>
           
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block font-bold mb-2">Last Name *</label>
               <input
@@ -672,7 +672,7 @@ function FileLeave({ staffId }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-bold mb-2">Office/Department *</label>
               <input
@@ -695,7 +695,7 @@ function FileLeave({ staffId }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-bold mb-2">Salary (PHP) *</label>
               <input
@@ -726,9 +726,9 @@ function FileLeave({ staffId }) {
           {/* A. Type of Leave to be Availed */}
           <div className="mb-6">
             <label className="block font-bold mb-3">A. Type of Leave to be Availed *</label>
-            <div className="grid grid-cols-2 gap-3 bg-blue-50/70 border border-blue-100 p-4 rounded-lg">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-blue-50/70 border border-blue-100 p-4 rounded-lg">
               {LEAVE_TYPE_OPTIONS.map(type => (
-                <label key={type} className="flex items-center">
+                <label key={type} className="flex items-center min-h-[44px]">
                   <input
                     type="radio"
                     name="leaveType"
@@ -791,7 +791,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify illness"
                       value={formData.leaveDetailsSpecific.sickInHospitalIllness || ''}
                       onChange={(e) => handleLeaveDetailsChange('sickInHospitalIllness', e.target.value)}
-                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
+                      className="ml-0 sm:ml-6 w-full max-w-xs px-3 py-2 border border-blue-200 rounded-md bg-white"
                       disabled={!formData.leaveDetailsSpecific.sickInHospital}
                     />
                   </div>
@@ -810,7 +810,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify illness"
                       value={formData.leaveDetailsSpecific.sickOutPatientIllness || ''}
                       onChange={(e) => handleLeaveDetailsChange('sickOutPatientIllness', e.target.value)}
-                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
+                      className="ml-0 sm:ml-6 w-full max-w-xs px-3 py-2 border border-blue-200 rounded-md bg-white"
                       disabled={!formData.leaveDetailsSpecific.sickOutPatient}
                     />
                   </div>
@@ -827,7 +827,7 @@ function FileLeave({ staffId }) {
                     placeholder="specify illness"
                     value={formData.leaveDetailsSpecific.womenIllness || ''}
                     onChange={(e) => handleLeaveDetailsChange('womenIllness', e.target.value)}
-                    className="px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
+                    className="w-full max-w-xs px-3 py-2 border border-blue-200 rounded-md bg-white"
                   />
                 </div>
               </div>
@@ -869,7 +869,7 @@ function FileLeave({ staffId }) {
                       placeholder="specify other"
                       value={formData.leaveDetailsSpecific.studyOtherDetails || ''}
                       onChange={(e) => handleLeaveDetailsChange('studyOtherDetails', e.target.value)}
-                      className="ml-6 px-3 py-2 border border-blue-200 rounded-md w-80 bg-white"
+                      className="ml-0 sm:ml-6 w-full max-w-xs px-3 py-2 border border-blue-200 rounded-md bg-white"
                       disabled={!formData.leaveDetailsSpecific.studyOther}
                     />
                   </div>
@@ -920,20 +920,22 @@ function FileLeave({ staffId }) {
           <div className="mb-6">
             <label className="block font-bold mb-2">Inclusive Dates *</label>
             {formData.dateRanges.map((range, idx) => (
-              <div key={idx} className="grid grid-cols-2 gap-4 mb-2 items-end">
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2 items-end">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Start Date</label>
+                  <label htmlFor={`startDate-${idx}`} className="block text-sm font-medium mb-1">Start Date</label>
                   <input
+                    id={`startDate-${idx}`}
                     type="date"
                     value={range.startDate}
                     onChange={e => handleDateRangeChange(idx, 'startDate', e.target.value)}
                     className="w-full px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
                   />
                 </div>
-                <div className="flex gap-2 items-end">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">End Date</label>
+                  <div className="flex gap-2 items-end min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <label htmlFor={`endDate-${idx}`} className="block text-sm font-medium mb-1">End Date</label>
                     <input
+                      id={`endDate-${idx}`}
                       type="date"
                       value={range.endDate}
                       onChange={e => handleDateRangeChange(idx, 'endDate', e.target.value)}
@@ -944,8 +946,9 @@ function FileLeave({ staffId }) {
                     <button
                       type="button"
                       onClick={() => removeDateRange(idx)}
-                      className="ml-2 px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
+                      className="ml-2 min-h-[44px] min-w-[44px] px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
                       title="Remove this date range"
+                      aria-label="Remove this date range"
                     >
                       –
                     </button>
@@ -954,8 +957,9 @@ function FileLeave({ staffId }) {
                     <button
                       type="button"
                       onClick={addDateRange}
-                      className="ml-2 px-2 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                      className="ml-2 min-h-[44px] min-w-[44px] px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                       title="Add another date range"
+                      aria-label="Add another date range"
                     >
                       +
                     </button>
@@ -995,8 +999,9 @@ function FileLeave({ staffId }) {
         {/* Late Filing Explanation logic will need to be updated to check all date ranges, not just the first */}
         {showLateExplanation && (
           <div className="mb-6">
-            <label className="block font-bold mb-2 text-red-600">Explanation for Late Filing *</label>
+            <label htmlFor="lateFilingExplanation" className="block font-bold mb-2 text-red-600">Explanation for Late Filing *</label>
             <textarea
+              id="lateFilingExplanation"
               name="lateFilingExplanation"
               value={formData.lateFilingExplanation}
               onChange={handleChange}
@@ -1010,7 +1015,7 @@ function FileLeave({ staffId }) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
+          className="w-full min-h-[44px] bg-blue-500 text-white py-2.5 rounded-md hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
         >
           {loading ? (editingLeaveId ? 'Updating...' : 'Filing...') : (editingLeaveId ? 'Update & Resubmit Leave Request' : 'File Leave Request')}
         </button>

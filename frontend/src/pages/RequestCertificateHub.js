@@ -180,7 +180,7 @@ function NoPendencyRequestForm() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {submitting ? 'Submitting...' : 'Submit Request'}
             </button>
@@ -194,16 +194,16 @@ function NoPendencyRequestForm() {
           <p className="mt-3 text-sm text-slate-600">You have not submitted any requests yet.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-full text-left text-sm">
               <thead className="bg-blue-50 text-blue-950">
                 <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2">Pending Case</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Admin Remarks</th>
-                  <th className="px-3 py-2">Proof of Payment</th>
-                  <th className="px-3 py-2">Action</th>
+                  <th scope="col" className="px-3 py-2">Date</th>
+                  <th scope="col" className="px-3 py-2">Position</th>
+                  <th scope="col" className="px-3 py-2">Pending Case</th>
+                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">Admin Remarks</th>
+                  <th scope="col" className="px-3 py-2">Proof of Payment</th>
+                  <th scope="col" className="px-3 py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,7 +226,7 @@ function NoPendencyRequestForm() {
                               setError(proofError.response?.data?.message || 'Unable to download proof of payment.');
                             }
                           }}
-                          className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                         >
                           Download
                         </button>
@@ -237,7 +237,7 @@ function NoPendencyRequestForm() {
                         <button
                           type="button"
                           onClick={() => handlePrint(request)}
-                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                         >
                           <TbPrinter size={14} />
                           Print
@@ -434,7 +434,7 @@ function NoLeaveWithoutPayCertificateForm() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
             >
               {submitting ? 'Submitting...' : 'Submit Request'}
             </button>
@@ -448,16 +448,16 @@ function NoLeaveWithoutPayCertificateForm() {
           <p className="mt-3 text-sm text-slate-600">You have not submitted any requests yet.</p>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-full text-left text-sm">
               <thead className="bg-blue-50 text-blue-950">
                 <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2">Leave Without Pay</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Admin Remarks</th>
-                  <th className="px-3 py-2">Proof of Payment</th>
-                  <th className="px-3 py-2">Action</th>
+                  <th scope="col" className="px-3 py-2">Date</th>
+                  <th scope="col" className="px-3 py-2">Position</th>
+                  <th scope="col" className="px-3 py-2">Leave Without Pay</th>
+                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">Admin Remarks</th>
+                  <th scope="col" className="px-3 py-2">Proof of Payment</th>
+                  <th scope="col" className="px-3 py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -480,7 +480,7 @@ function NoLeaveWithoutPayCertificateForm() {
                               setError(proofError.response?.data?.message || 'Unable to download proof of payment.');
                             }
                           }}
-                          className="whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center whitespace-nowrap rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                         >
                           Download
                         </button>
@@ -495,7 +495,7 @@ function NoLeaveWithoutPayCertificateForm() {
                               setError('Allow pop-ups for this site to print the certificate.');
                             }
                           }}
-                          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                         >
                           <TbPrinter size={14} />
                           Print

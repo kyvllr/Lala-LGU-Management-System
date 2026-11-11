@@ -203,10 +203,11 @@ function SystemLogs() {
       <div className="bg-white border border-blue-100 rounded-xl p-4 md:p-5 shadow-sm mb-5">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
           <div className="md:col-span-3">
-            <label className="block text-blue-700 font-bold mb-2">Search Logs</label>
+            <label htmlFor="log-search" className="block text-blue-700 font-bold mb-2">Search Logs</label>
             <div className="relative">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
+                id="log-search"
                 type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -217,8 +218,9 @@ function SystemLogs() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-blue-700 font-bold mb-2">Module</label>
+            <label htmlFor="log-module-filter" className="block text-blue-700 font-bold mb-2">Module</label>
             <select
+              id="log-module-filter"
               value={moduleFilter}
               onChange={(event) => setModuleFilter(event.target.value)}
               className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
@@ -232,8 +234,9 @@ function SystemLogs() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-blue-700 font-bold mb-2">Action</label>
+            <label htmlFor="log-action-filter" className="block text-blue-700 font-bold mb-2">Action</label>
             <select
+              id="log-action-filter"
               value={actionFilter}
               onChange={(event) => setActionFilter(event.target.value)}
               className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
@@ -247,8 +250,9 @@ function SystemLogs() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-blue-700 font-bold mb-2">Status</label>
+            <label htmlFor="log-status-filter" className="block text-blue-700 font-bold mb-2">Status</label>
             <select
+              id="log-status-filter"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
               className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
@@ -262,8 +266,9 @@ function SystemLogs() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-blue-700 font-bold mb-2">Date Range</label>
+            <label htmlFor="log-date-range-filter" className="block text-blue-700 font-bold mb-2">Date Range</label>
             <select
+              id="log-date-range-filter"
               value={dateRange}
               onChange={(event) => setDateRange(event.target.value)}
               className="w-full px-3 py-2.5 border border-blue-200 rounded-md focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none"
@@ -294,14 +299,14 @@ function SystemLogs() {
           <table className="w-full min-w-[1100px]">
             <thead>
               <tr className="bg-blue-500 text-white">
-                <th className="text-left px-4 py-3 text-sm font-semibold">Timestamp</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Module</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Action</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">User</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Description</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">IP Address</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Status</th>
-                <th className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Timestamp</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Module</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Action</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">User</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Description</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">IP Address</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Status</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -330,7 +335,7 @@ function SystemLogs() {
                     <td className="px-4 py-2.5 text-sm font-medium text-gray-900">{log.module || '-'}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-700">{log.action || '-'}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-700">{log.user || '-'}</td>
-                    <td className="px-4 py-2.5 text-sm text-gray-700 max-w-[460px]">{log.description || '-'}</td>
+                    <td className="px-4 py-2.5 text-sm text-gray-700 max-w-xs sm:max-w-md break-words">{log.description || '-'}</td>
                     <td className="px-4 py-2.5 text-sm text-gray-700 whitespace-nowrap">{log.ipAddress || '-'}</td>
                     <td className="px-4 py-2.5 text-sm">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_CLASSES[log.status] || 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
@@ -418,25 +423,28 @@ function SystemLogs() {
           }}
         >
           <div
-            className="bg-white w-full max-w-3xl rounded-xl border border-blue-100 shadow-2xl overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="system-log-details-title"
+            className="bg-white w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-blue-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-blue-950">Log Details</h3>
+            <div className="px-4 sm:px-6 py-4 border-b border-blue-100 flex items-center justify-between gap-3">
+              <h3 id="system-log-details-title" className="text-xl font-bold text-blue-950">Log Details</h3>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedLog(null);
                   setCopyState('idle');
                 }}
-                className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+                className="p-2.5 sm:p-0 text-gray-500 hover:text-gray-700 text-xl leading-none"
                 aria-label="Close log details"
               >
                 ×
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-auto">
+            <div className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs uppercase text-gray-500 tracking-wide">Timestamp</p>
@@ -477,7 +485,7 @@ function SystemLogs() {
                   <button
                     type="button"
                     onClick={copyMetadata}
-                    className="px-3 py-1.5 rounded-md bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800"
+                    className="px-3 py-2.5 sm:py-1.5 rounded-md bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800"
                   >
                     Copy Metadata
                   </button>
@@ -490,14 +498,14 @@ function SystemLogs() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedLog(null);
                   setCopyState('idle');
                 }}
-                className="px-4 py-2 rounded-md bg-blue-500 text-white font-semibold hover:bg-blue-600"
+                className="px-4 py-2.5 sm:py-2 rounded-md bg-blue-500 text-white font-semibold hover:bg-blue-600"
               >
                 Close
               </button>

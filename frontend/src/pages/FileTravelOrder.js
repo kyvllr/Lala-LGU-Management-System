@@ -329,10 +329,11 @@ function FileTravelOrder({ staffId }) {
       {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>}
       {success && <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">{success}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border border-blue-100 shadow-sm space-y-4">
+      <form onSubmit={handleSubmit} className="min-w-0 bg-white p-4 sm:p-6 rounded-lg border border-blue-100 shadow-sm space-y-4">
         <div className="max-w-xs">
-          <label className="block font-bold mb-2">Travel Type *</label>
+          <label htmlFor="travelType" className="block font-bold mb-2">Travel Type *</label>
           <select
+            id="travelType"
             value={travelType}
             onChange={(e) => setTravelType(e.target.value)}
             className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
@@ -346,10 +347,11 @@ function FileTravelOrder({ staffId }) {
 
         {/* Office Travel Order Fields */}
         {travelType === 'office' && (
-          <div className="grid grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
             <div>
-              <label className="block font-bold mb-2">Date of Filing *</label>
+              <label htmlFor="dateOfFiling" className="block font-bold mb-2">Date of Filing *</label>
               <input
+                id="dateOfFiling"
                 type="date"
                 name="dateOfFiling"
                 value={formData.dateOfFiling}
@@ -360,8 +362,9 @@ function FileTravelOrder({ staffId }) {
             </div>
 
             <div>
-              <label className="block font-bold mb-2">Number of Names/Designations *</label>
+              <label htmlFor="numDesignations" className="block font-bold mb-2">Number of Names/Designations *</label>
               <select
+                id="numDesignations"
                 value={isCustomDesignations ? 'other' : numDesignations}
                 onChange={handleNumDesignationsChange}
                 className="w-full px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
@@ -375,8 +378,9 @@ function FileTravelOrder({ staffId }) {
 
             {isCustomDesignations && (
               <div>
-                <label className="block font-bold mb-2">Enter Number of Names/Designations *</label>
+                <label htmlFor="customNumDesignations" className="block font-bold mb-2">Enter Number of Names/Designations *</label>
                 <input
+                  id="customNumDesignations"
                   type="number"
                   value={customNumDesignations}
                   onChange={handleCustomNumDesignationsChange}
@@ -389,8 +393,9 @@ function FileTravelOrder({ staffId }) {
 
             {formData.designations.map((designation, index) => (
               <div key={index}>
-                <label className="block font-bold mb-2">Name/Designation {index + 1} *</label>
+                <label htmlFor={`designation-${index}`} className="block font-bold mb-2">Name/Designation {index + 1} *</label>
                 <input
+                  id={`designation-${index}`}
                   type="text"
                   value={designation}
                   onChange={(e) => handleDesignationChange(index, e.target.value)}
@@ -402,8 +407,9 @@ function FileTravelOrder({ staffId }) {
             ))}
 
             <div>
-              <label className="block font-bold mb-2">Permanent Station *</label>
+              <label htmlFor="permanentStation" className="block font-bold mb-2">Permanent Station *</label>
               <input
+                id="permanentStation"
                 type="text"
                 name="permanentStation"
                 value={formData.permanentStation}
@@ -415,8 +421,9 @@ function FileTravelOrder({ staffId }) {
             </div>
 
             <div>
-              <label className="block font-bold mb-2">Purpose of Travel *</label>
+              <label htmlFor="purposeOfTravel" className="block font-bold mb-2">Purpose of Travel *</label>
               <input
+                id="purposeOfTravel"
                 type="text"
                 name="purposeOfTravel"
                 value={formData.purposeOfTravel}
@@ -428,8 +435,9 @@ function FileTravelOrder({ staffId }) {
             </div>
 
             <div>
-              <label className="block font-bold mb-2">Activity Organized/Sponsored By *</label>
+              <label htmlFor="activitySponsoredBy" className="block font-bold mb-2">Activity Organized/Sponsored By *</label>
               <input
+                id="activitySponsoredBy"
                 type="text"
                 name="activitySponsoredBy"
                 value={formData.activitySponsoredBy}
@@ -440,10 +448,11 @@ function FileTravelOrder({ staffId }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
               <div>
-                <label className="block font-bold mb-2">Period Covered From *</label>
+                <label htmlFor="periodCoveredFrom" className="block font-bold mb-2">Period Covered From *</label>
                 <input
+                  id="periodCoveredFrom"
                   type="date"
                   name="periodCoveredFrom"
                   value={formData.periodCoveredFrom}
@@ -453,8 +462,9 @@ function FileTravelOrder({ staffId }) {
                 />
               </div>
               <div>
-                <label className="block font-bold mb-2">Period Covered To *</label>
+                <label htmlFor="periodCoveredTo" className="block font-bold mb-2">Period Covered To *</label>
                 <input
+                  id="periodCoveredTo"
                   type="date"
                   name="periodCoveredTo"
                   value={formData.periodCoveredTo}
@@ -465,7 +475,7 @@ function FileTravelOrder({ staffId }) {
               </div>
             </div>
 
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block font-bold mb-2">Please Check *</label>
               <div className="flex flex-wrap gap-x-6 gap-y-2">
                 {[
@@ -532,7 +542,7 @@ function FileTravelOrder({ staffId }) {
 
         {/* Travel Abroad Fields */}
         {travelType === 'abroad' && (
-          <div className="grid grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-blue-100 bg-blue-50/60 p-4">
             <div>
               <label className="block font-bold mb-2">Date Prepared *</label>
               <input
@@ -691,7 +701,7 @@ function FileTravelOrder({ staffId }) {
         <button
           type="submit"
           disabled={loading || !staffName || !travelType}
-          className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 disabled:bg-gray-400 text-sm font-semibold"
+          className="w-full bg-blue-500 text-white py-2.5 rounded-md hover:bg-blue-600 disabled:bg-gray-400 text-sm font-semibold"
         >
           {loading ? (editingTravelOrderId ? 'Updating...' : 'Filing...') : (editingTravelOrderId ? 'Update & Resubmit Travel Order' : 'File Travel Order')}
         </button>

@@ -175,7 +175,7 @@ function AddStaff() {
       {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">{error}</div>}
       {success && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">{success}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-6 rounded shadow space-y-4">
         <div>
           <label className="block font-bold mb-2">Item Number *</label>
           <input
@@ -523,7 +523,7 @@ function AddStaff() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+          className="w-full bg-blue-600 text-white py-2.5 sm:py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
         >
           {loading ? 'Adding...' : 'Add Staff'}
         </button>

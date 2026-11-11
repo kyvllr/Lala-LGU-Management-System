@@ -188,7 +188,7 @@ const RequestCOE = () => {
 
   if (successMessage) {
     return (
-      <div className="max-w-xl mx-auto mt-10 p-6 bg-green-50 border border-green-200 rounded-lg shadow">
+      <div className="max-w-xl mx-auto mt-10 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-lg shadow">
         <h2 className="text-2xl font-bold mb-4 text-green-700">✓ Request Submitted</h2>
         <p className="text-green-800 mb-4">{successMessage}</p>
         <button
@@ -203,16 +203,16 @@ const RequestCOE = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto mt-10 p-6 bg-white border border-gray-200 rounded-lg shadow">
-      <div className="flex justify-between items-start mb-6">
-        <div>
+    <div className="max-w-2xl mx-auto mt-10 p-4 sm:p-6 bg-white border border-gray-200 rounded-lg shadow">
+      <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+        <div className="min-w-0">
           <h2 className="text-2xl font-bold mb-2 text-blue-700">Request Certificate of Employment (COE)</h2>
           <p className="text-sm text-gray-600">Submit a request for your Certificate of Employment. Admin will review and notify you when ready for pickup at the HR Office.</p>
         </div>
         <button
           type="button"
           onClick={handleOpenModal}
-          className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition font-semibold text-sm whitespace-nowrap"
+          className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-700 transition font-semibold text-sm whitespace-nowrap"
         >
           <TbHistory size={18} />
           My Requests
@@ -226,10 +226,11 @@ const RequestCOE = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block font-medium mb-1">Full Name *</label>
+            <label htmlFor="coe-full-name" className="block font-medium mb-1">Full Name *</label>
             <input
+              id="coe-full-name"
               type="text"
               name="fullName"
               value={form.fullName}
@@ -282,7 +283,7 @@ const RequestCOE = () => {
           {proofOfPayment && <p className="mt-1 text-sm text-gray-600">Selected: {proofOfPayment.name}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium mb-1">Position Title</label>
             <input
@@ -310,8 +311,8 @@ const RequestCOE = () => {
         <div className="border-t border-gray-200 pt-4">
           <h3 className="mb-1 font-semibold text-gray-800">Certificate Details</h3>
           <p className="mb-3 text-sm text-gray-600">These details will be included in the printed Certificate of Employment.</p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <label className="block font-medium mb-1">Address</label>
               <input
                 type="text"
@@ -410,7 +411,7 @@ const RequestCOE = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium mb-1">Period (From)</label>
             <input
@@ -482,7 +483,7 @@ const RequestCOE = () => {
         <button
           type="submit"
           disabled={submitting || !agreedToAccuracy}
-          className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="w-full bg-blue-600 text-white py-2.5 rounded font-semibold hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {submitting ? 'Submitting...' : 'Submit COE Request'}
         </button>
@@ -491,21 +492,22 @@ const RequestCOE = () => {
       {/* Modal for My COE Requests */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-labelledby="my-coe-requests-title" className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">My COE Requests</h3>
+            <div className="bg-blue-600 px-4 sm:px-6 py-4 flex items-center justify-between">
+              <h3 id="my-coe-requests-title" className="text-xl font-bold text-white">My COE Requests</h3>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="text-white hover:text-gray-200 text-2xl font-bold"
+                aria-label="Close"
+                className="text-white hover:text-gray-200 text-2xl font-bold min-h-[44px] min-w-[44px]"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {loadingMyCoes ? (
                 <p className="text-gray-600 text-center py-8">Loading your requests...</p>
               ) : myCoes.length === 0 ? (
@@ -561,7 +563,7 @@ const RequestCOE = () => {
                               Download proof of payment: {coe.paymentProof.fileName}
                             </button>
                           )}
-                          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4">
                             <div>
                               <span className="text-gray-600">Full Name:</span>
                               <p className="font-medium text-gray-800">{coe.fullName}</p>
@@ -609,18 +611,18 @@ const RequestCOE = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-gray-100 px-6 py-4 flex justify-between items-center">
+            <div className="bg-gray-100 px-4 sm:px-6 py-4 flex flex-wrap justify-between items-center gap-3">
               <button
                 type="button"
                 onClick={() => navigate('/my-coe-requests')}
-                className="px-4 py-2 text-blue-600 font-semibold hover:text-blue-800 transition"
+                className="px-4 py-2.5 sm:py-2 text-blue-600 font-semibold hover:text-blue-800 transition"
               >
                 View Full Details
               </button>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition font-semibold"
+                className="px-4 py-2.5 sm:py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition font-semibold"
               >
                 Close
               </button>

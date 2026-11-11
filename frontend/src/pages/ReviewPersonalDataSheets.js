@@ -157,21 +157,21 @@ export default function ReviewPersonalDataSheets() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <p className="text-blue-700 font-medium">Loading Personal Data Sheet submissions...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-blue-950 mb-2">Personal Data Sheet Reviews</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-950 mb-2">Personal Data Sheet Reviews</h1>
           <p className="text-sm text-blue-700/80">Review submitted Personal Data Sheets from applicants</p>
         </div>
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
             </svg>
@@ -180,7 +180,7 @@ export default function ReviewPersonalDataSheets() {
               placeholder="Search by PDS ID, name, email, mobile..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="border border-blue-200 rounded-md px-3 py-2 w-80 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
+              className="border border-blue-200 rounded-md px-3 py-2.5 sm:py-2 w-full sm:w-80 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
             />
           </div>
           <label className="text-xs font-semibold tracking-wide text-blue-800 uppercase">From</label>
@@ -252,13 +252,13 @@ export default function ReviewPersonalDataSheets() {
             <table className="w-full border-collapse text-[13px] text-slate-700">
               <thead>
                 <tr className="bg-blue-100/80 text-blue-900">
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">PDS ID</th>
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Full Name</th>
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Email</th>
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Mobile</th>
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Status</th>
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Submitted</th>
-                  <th className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Actions</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">PDS ID</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Full Name</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Email</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Mobile</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Status</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Submitted</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-center text-xs font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -290,9 +290,9 @@ export default function ReviewPersonalDataSheets() {
                       </td>
                       <td className="border border-blue-100 px-3 py-1.5 text-sm">{new Date(sheet.createdAt).toLocaleDateString()}</td>
                       <td className="border border-blue-100 px-3 py-1.5 text-center space-x-2">
-                        <button onClick={() => setSelectedSheet(sheet)} className="bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600 transition text-xs font-semibold">View</button>
+                        <button onClick={() => setSelectedSheet(sheet)} className="bg-blue-500 text-white px-3 py-2 sm:py-1 rounded-md hover:bg-blue-600 transition text-xs font-semibold">View</button>
                         
-                        <button onClick={() => handleDelete(sheet.pdsId)} disabled={actioningId === `${sheet.pdsId}-Delete`} className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 transition disabled:opacity-50 text-xs font-semibold">{actioningId === `${sheet.pdsId}-Delete` ? 'Deleting...' : 'Delete'}</button>
+                        <button onClick={() => handleDelete(sheet.pdsId)} disabled={actioningId === `${sheet.pdsId}-Delete`} className="bg-red-500 text-white px-3 py-2 sm:py-1 rounded-md hover:bg-red-600 transition disabled:opacity-50 text-xs font-semibold">{actioningId === `${sheet.pdsId}-Delete` ? 'Deleting...' : 'Delete'}</button>
                       </td>
                     </tr>
                   );
@@ -305,15 +305,16 @@ export default function ReviewPersonalDataSheets() {
 
       {selectedSheet && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6">
+          <div role="dialog" aria-modal="true" aria-labelledby="pds-review-details-title" className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold text-blue-950">PDS Details - {selectedSheet.pdsId}</h2>
+              <h2 id="pds-review-details-title" className="text-2xl font-bold text-blue-950 break-words min-w-0">PDS Details - {selectedSheet.pdsId}</h2>
               <button
                 onClick={() => {
                   setSelectedSheet(null);
                   closeRevisionModal();
                 }}
-                className="text-gray-600 hover:text-gray-800 text-xl"
+                className="text-gray-600 hover:text-gray-800 text-xl p-2 -m-2 leading-none"
+                aria-label="Close"
               >
                 ✕
               </button>
@@ -410,13 +411,13 @@ export default function ReviewPersonalDataSheets() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-100">
-                          <th className="border border-gray-300 px-2 py-1 text-left">Level</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">School</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Period</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Honors</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Level</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">School</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Period</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Honors</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -583,8 +584,8 @@ export default function ReviewPersonalDataSheets() {
 
       {showRevisionModal && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-xl p-6">
-            <h3 className="text-xl font-bold text-blue-950 mb-3">Revision Remarks</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="pds-revision-remarks-title" className="bg-white rounded-xl border border-blue-100 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+            <h3 id="pds-revision-remarks-title" className="text-xl font-bold text-blue-950 mb-3">Revision Remarks</h3>
             <p className="text-sm text-blue-700/80 mb-3">
               Add remarks for this PDS so the staff knows what to update before resubmitting.
             </p>

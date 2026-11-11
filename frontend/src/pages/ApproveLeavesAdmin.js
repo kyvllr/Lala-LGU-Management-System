@@ -646,11 +646,11 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                   selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-500' : ''
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-blue-950">{leave.staffName}</h3>
-                    <p className="text-blue-700/80 text-sm">{leave.leaveType}</p>
-                    <p className="text-blue-700/80 text-sm">
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-blue-950 break-words">{leave.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm break-words">{leave.leaveType}</p>
+                    <p className="text-blue-700/80 text-sm break-words">
                       {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                     </p>
                   </div>
@@ -665,7 +665,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                           e.stopPropagation();
                           openPrintSetupModal(leave);
                         }}
-                        className="mt-2 w-full bg-slate-600 text-white px-3 py-1 rounded-md hover:bg-slate-700 text-xs font-semibold"
+                        className="mt-2 w-full bg-slate-600 text-white px-3 py-2.5 sm:py-1 rounded-md hover:bg-slate-700 text-xs font-semibold"
                       >
                         Print
                       </button>
@@ -738,8 +738,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
             )}
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleApprove(); }}>
               <div>
-                <label className="block font-bold mb-2">Approval Remarks (Optional)</label>
+                <label htmlFor="leave-approval-remarks" className="block font-bold mb-2">Approval Remarks (Optional)</label>
                 <textarea
+                  id="leave-approval-remarks"
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
@@ -748,19 +749,18 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
               </div>
 
               <div className="space-y-2">
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     onClick={() => openPrintSetupModal(selectedLeave)}
-                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
-                  >
-                    Print
+                    className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
+                  >                    Print
                   </button>
                 </div>
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve
                 </button>
@@ -770,7 +770,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -780,7 +780,7 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Approve with Revision
                 </button>
@@ -791,9 +791,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="disapprove-leave-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="disapprove-leave-title" className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
@@ -823,9 +823,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Approve with Revision</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="revision-leave-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="revision-leave-title" className="text-lg font-bold mb-3">Approve with Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}
@@ -855,9 +855,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
       )}
 
       {showPrintModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-lg rounded shadow-lg p-6">
-            <h3 className="text-lg font-bold mb-3">Print Setup (7.B Recommendation)</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="print-setup-leave-title" className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded shadow-lg p-4 sm:p-6">
+            <h3 id="print-setup-leave-title" className="text-lg font-bold mb-3">Print Setup (7.B Recommendation)</h3>
             <p className="text-sm text-gray-600 mb-4">Please complete this before printing the leave form.</p>
 
             <div className="space-y-4">
@@ -885,8 +885,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
 
               {printForm.recommendation === 'For Disapproval' && (
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Disapproval Remark</label>
+                  <label htmlFor="leave-print-disapproval-remark" className="block text-sm font-semibold mb-2">Disapproval Remark</label>
                   <textarea
+                    id="leave-print-disapproval-remark"
                     value={printForm.disapprovalRemark}
                     onChange={(e) => updatePrintForm((prev) => ({ ...prev, disapprovalRemark: e.target.value }))}
                     rows="3"
@@ -897,8 +898,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
               )}
 
               <div>
-                <label className="block text-sm font-semibold mb-2">7.D Disapproved Due To</label>
+                <label htmlFor="leave-print-disapproved-due-to" className="block text-sm font-semibold mb-2">7.D Disapproved Due To</label>
                 <textarea
+                  id="leave-print-disapproved-due-to"
                   value={printForm.disapprovedDueTo}
                   onChange={(e) => updatePrintForm((prev) => ({ ...prev, disapprovedDueTo: e.target.value }))}
                   rows="3"
@@ -908,11 +910,12 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Authorized Officer</label>
-                <div className="mb-2 text-xs text-gray-500">
+                <label htmlFor="leave-print-authorized-officer" className="block text-sm font-semibold mb-2">Authorized Officer</label>
+                <div className="mb-2 text-xs text-gray-500 break-words">
                   First signature is fixed: {authorizedOfficerName}
                 </div>
                 <select
+                  id="leave-print-authorized-officer"
                   value={printForm.authorizedOfficer}
                   onChange={(e) => updatePrintForm((prev) => ({ ...prev, authorizedOfficer: e.target.value }))}
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -926,8 +929,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
 
               {printForm.authorizedOfficer === customAuthorizedOfficerOption && (
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Custom Authorized Officer</label>
+                  <label htmlFor="leave-print-custom-authorized-officer" className="block text-sm font-semibold mb-2">Custom Authorized Officer</label>
                   <input
+                    id="leave-print-custom-authorized-officer"
                     type="text"
                     value={printForm.customAuthorizedOfficer}
                     onChange={(e) => updatePrintForm((prev) => ({ ...prev, customAuthorizedOfficer: e.target.value }))}
@@ -938,8 +942,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
               )}
 
               <div>
-                <label className="block text-sm font-semibold mb-2">Municipal Assessor</label>
+                <label htmlFor="leave-print-municipal-assessor" className="block text-sm font-semibold mb-2">Municipal Assessor</label>
                 <select
+                  id="leave-print-municipal-assessor"
                   value={printForm.municipalAssessor}
                   onChange={(e) => updatePrintForm((prev) => ({ ...prev, municipalAssessor: e.target.value }))}
                   className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -953,8 +958,9 @@ function ApproveLeavesAdmin({ forcedStatus = 'Pending' }) {
 
               {printForm.municipalAssessor === customAssessorOption && (
                 <div>
-                  <label className="block text-sm font-semibold mb-2">Custom Municipal Assessor</label>
+                  <label htmlFor="leave-print-custom-municipal-assessor" className="block text-sm font-semibold mb-2">Custom Municipal Assessor</label>
                   <input
+                    id="leave-print-custom-municipal-assessor"
                     type="text"
                     value={printForm.customMunicipalAssessor}
                     onChange={(e) => updatePrintForm((prev) => ({ ...prev, customMunicipalAssessor: e.target.value }))}

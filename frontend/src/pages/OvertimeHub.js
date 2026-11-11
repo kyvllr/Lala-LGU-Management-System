@@ -25,14 +25,14 @@ function OvertimeHub({ staffId, initialTab = 'request' }) {
           <button
             type="button"
             onClick={() => setTab('request')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'request' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+            className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'request' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             Request Overtime
           </button>
           <button
             type="button"
             onClick={() => setTab('my')}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+            className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-md text-sm font-semibold transition ${activeTab === 'my' ? 'bg-blue-500 text-white shadow-sm' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
           >
             My Overtime Requests
           </button>

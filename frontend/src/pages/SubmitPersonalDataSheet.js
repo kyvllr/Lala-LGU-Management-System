@@ -1491,14 +1491,14 @@ export default function SubmitPersonalDataSheet() {
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl" style={{ opacity: 0.95 }}>
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-8 w-full max-w-6xl" style={{ opacity: 0.95 }}>
         <div className="text-center mb-6">
           <img
             src="/csc.PNG"
             alt="LALA LGU Logo"
-            className="w-40 h-40 mx-auto mb-3 object-contain"
+            className="w-24 h-24 sm:w-40 sm:h-40 mx-auto mb-3 object-contain"
           />
-          <h1 className="text-3xl font-bold text-gray-800 mb-1">Personal Data Sheet</h1> 
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">Personal Data Sheet</h1> 
           <p className="text-gray-500">{isAdminEditingPds ? `Editing PDS: ${editingPdsId}` : 'Fill up the form and submit it for admin review'}</p>
           <div className="mt-3">
             <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase ${formMode.style}`}>
@@ -1531,7 +1531,7 @@ export default function SubmitPersonalDataSheet() {
 
         <div className="mb-6">
           <p className="text-sm text-gray-600 font-medium">Page {currentPage} of 8</p>
-          <div className="grid grid-cols-8 gap-2 mt-3 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mt-3 mb-3">
             <button
               type="button"
               onClick={() => handleStepClick(1)}
@@ -1754,7 +1754,7 @@ export default function SubmitPersonalDataSheet() {
 
         {showSubmitModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="pds-submit-choice-title">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-4 sm:p-6 shadow-xl">
               <h2 id="pds-submit-choice-title" className="text-xl font-bold text-slate-900">Submit Personal Data Sheet</h2>
               <p className="mt-1 text-sm text-slate-600">Choose whether to submit your PDS as an applicant only or apply for a published position.</p>
 

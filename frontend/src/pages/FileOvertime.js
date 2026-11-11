@@ -361,12 +361,12 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
       {success && <div className="mb-4 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200">{success}</div>}
 
       {showRequestSection && (
-      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 sm:p-6 mb-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Staff Information Section */}
           <div className="border-b border-blue-100 pb-6">
             <h2 className="text-xl font-bold text-blue-950 mb-4">Staff Information</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
                 <input
@@ -545,7 +545,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                           type="button"
                           onClick={() => removeStaffRow(index)}
                           disabled={formData.staffDetails.length === 1}
-                          className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-300 transition text-xs font-semibold"
+                          className="px-3 py-2.5 sm:py-1 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-300 transition text-xs font-semibold"
                         >
                           Remove
                         </button>
@@ -565,18 +565,18 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
           </div>
 
           {/* Form Actions */}
-          <div className="flex gap-4 justify-end">
+          <div className="flex flex-wrap gap-3 sm:gap-4 justify-end">
             <button
               type="button"
               onClick={handleCancel}
-              className="px-6 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
+              className="px-6 py-2.5 sm:py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 transition text-sm font-semibold"
+              className="px-6 py-2.5 sm:py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 transition text-sm font-semibold"
             >
               {loading ? 'Submitting...' : editingOvertimeId ? 'Update' : 'File Overtime'}
             </button>
@@ -587,7 +587,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
 
       {/* Submitted Overtimes List */}
       {showMyRequestsSection && (
-      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-6">
+      <div className="bg-white rounded-lg border border-blue-100 shadow-sm p-4 sm:p-6">
         {showRequestSection && <h2 className="text-2xl font-bold text-blue-950 mb-4">My Overtime Requests</h2>}
 
         <div className="mb-4 flex flex-col sm:flex-row gap-2 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
@@ -646,7 +646,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                         onClick={() => {
                           setSelectedOvertime(overtime);
                         }}
-                        className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition inline-block text-xs font-semibold"
+                        className="px-3 py-2.5 sm:py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition inline-block text-xs font-semibold"
                         title="View details"
                       >
                         View
@@ -654,7 +654,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                       {canPrintOvertime(overtime) && (
                         <button
                           onClick={() => printOvertimeRequest(overtime)}
-                          className="px-3 py-1 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition inline-block text-xs font-semibold"
+                          className="px-3 py-2.5 sm:py-1 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition inline-block text-xs font-semibold"
                           title="Print approved request"
                         >
                           Print
@@ -664,14 +664,14 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                         <>
                           <button
                             onClick={() => setSearchParams({ edit: overtime.overtimeId })}
-                            className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition inline-block text-xs font-semibold"
+                            className="px-3 py-2.5 sm:py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition inline-block text-xs font-semibold"
                             title="Edit request"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDeleteOvertime(overtime.overtimeId)}
-                            className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition inline-block text-xs font-semibold"
+                            className="px-3 py-2.5 sm:py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition inline-block text-xs font-semibold"
                             title="Delete request"
                           >
                             Delete
@@ -691,24 +691,25 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
       {/* View Details Modal */}
       {selectedOvertime && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-blue-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div role="dialog" aria-modal="true" aria-labelledby="overtime-details-title" className="bg-white rounded-xl border border-blue-100 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-blue-500 text-white p-6 flex justify-between items-center sticky top-0">
-              <h2 className="text-2xl font-bold">Overtime Request Details</h2>
+            <div className="bg-blue-500 text-white p-4 sm:p-6 flex justify-between items-center sticky top-0">
+              <h2 id="overtime-details-title" className="text-2xl font-bold">Overtime Request Details</h2>
               <button
                 onClick={() => setSelectedOvertime(null)}
-                className="text-xl hover:text-gray-200 transition"
+                aria-label="Close"
+                className="text-xl hover:text-gray-200 transition min-h-[44px] min-w-[44px]"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               {/* Staff Information */}
               <div className="border-b pb-4">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">Staff Information</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Full Name</p>
                     <p className="text-lg font-semibold">{`${selectedOvertime.firstName || ''} ${selectedOvertime.lastName || ''}`.trim()}</p>
@@ -736,7 +737,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                     <p className="text-sm text-gray-600">Purpose of Overtime</p>
                     <p className="text-gray-800">{selectedOvertime.purposeOfOvertime}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600">From Date</p>
                       <p className="text-gray-800">{new Date(selectedOvertime.inclusiveDateStart).toLocaleDateString()}</p>
@@ -807,17 +808,17 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-4 justify-end pt-4 border-t">
+              <div className="flex flex-wrap gap-3 sm:gap-4 justify-end pt-4 border-t">
                 <button
                   onClick={() => setSelectedOvertime(null)}
-                  className="px-6 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
+                  className="px-6 py-2.5 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-100 transition text-sm font-semibold"
                 >
                   Close
                 </button>
                 {canPrintOvertime(selectedOvertime) && (
                   <button
                     onClick={() => printOvertimeRequest(selectedOvertime)}
-                    className="px-6 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition text-sm font-semibold"
+                    className="px-6 py-2.5 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition text-sm font-semibold"
                   >
                     Print
                   </button>
@@ -829,7 +830,7 @@ function FileOvertime({ staffId, viewMode = 'all' }) {
                       setSelectedOvertime(null);
                       setSearchParams({ edit: selectedOvertime.overtimeId });
                     }}
-                    className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-sm font-semibold"
+                    className="px-6 py-2.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition text-sm font-semibold"
                   >
                     Edit
                   </button>

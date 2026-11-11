@@ -580,11 +580,11 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-500' : ''
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-blue-950">{order.staffName}</h3>
-                    <p className="text-blue-700/80 text-sm">{order.destination || order.travelDestination || order.venueDestination || 'N/A'}</p>
-                    <p className="text-blue-700/80 text-sm">
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-blue-950 break-words">{order.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm break-words">{order.destination || order.travelDestination || order.venueDestination || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-sm break-words">
                       {formatDate(order.dateFrom)} - {formatDate(order.dateTo)}
                     </p>
                   </div>
@@ -705,8 +705,9 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
 
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleApprove(); }}>
               <div>
-                <label className="block font-bold mb-2">Approval Remarks (Optional)</label>
+                <label htmlFor="travel-admin-approval-remarks" className="block font-bold mb-2">Approval Remarks (Optional)</label>
                 <textarea
+                  id="travel-admin-approval-remarks"
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
@@ -718,7 +719,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                 <button
                   type="button"
                   onClick={() => printTravelOrder(selectedOrder)}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-slate-600 hover:bg-slate-700"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-slate-600 hover:bg-slate-700"
                 >
                   Print
                 </button>
@@ -727,7 +728,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                   <button
                     type="button"
                     onClick={handleApprove}
-                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
+                    className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                   >
                     Approve
                   </button>
@@ -737,7 +738,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                       setDisapproveComment('');
                       setShowDisapproveModal(true);
                     }}
-                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
+                    className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                   >
                     Disapprove
                   </button>
@@ -747,7 +748,7 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
                       setRevisionComment('');
                       setShowRevisionModal(true);
                     }}
-                    className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
+                    className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                   >
                     Approve with Revision
                   </button>
@@ -759,9 +760,9 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="travel-admin-disapprove-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="travel-admin-disapprove-title" className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
@@ -791,9 +792,9 @@ function ApproveTravelOrdersAdmin({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Approve with Revision</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="travel-admin-revision-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="travel-admin-revision-title" className="text-lg font-bold mb-3">Approve with Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}

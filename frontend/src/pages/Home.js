@@ -47,17 +47,17 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-800">
       <header className="border-b border-blue-100 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3" aria-label="Municipality of Lala home">
-            <img src="/logo.PNG" alt="Municipality of Lala seal" className="h-14 w-14 object-contain" />
-            <div className="leading-tight">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
+          <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="Municipality of Lala home">
+            <img src="/logo.PNG" alt="Municipality of Lala seal" className="h-14 w-14 shrink-0 object-contain" />
+            <div className="min-w-0 leading-tight">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Municipality of Lala</p>
               <p className="text-lg font-bold text-blue-950 sm:text-xl">Human Resource Services</p>
             </div>
           </Link>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
           >
             HR Information System <FiArrowRight aria-hidden="true" />
           </Link>
@@ -125,7 +125,7 @@ export default function Home() {
                   <FiFileText size={21} aria-hidden="true" />
                 </div>
                 <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{announcement.category}</p>
-                <h3 className="mt-2 text-xl font-bold text-blue-950">{announcement.title}</h3>
+                <h3 className="mt-2 text-xl font-bold break-words text-blue-950">{announcement.title}</h3>
                 <p className="mt-3 flex-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{announcement.content}</p>
                 {announcement.createdAt && (
                   <p className="mt-4 flex items-center gap-2 text-xs text-slate-500">
@@ -185,20 +185,20 @@ export default function Home() {
                     <FiBriefcase size={21} aria-hidden="true" />
                   </div>
                   <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Now accepting applications</p>
-                  <h3 className="mt-2 text-xl font-bold text-blue-950">{position.positionTitle}</h3>
-                  <p className="mt-1 text-sm text-slate-600">{position.placeOfAssignment}</p>
+                  <h3 className="mt-2 text-xl font-bold break-words text-blue-950">{position.positionTitle}</h3>
+                  <p className="mt-1 text-sm break-words text-slate-600">{position.placeOfAssignment}</p>
                   <dl className="mt-5 space-y-2 border-t border-slate-200 pt-4 text-sm">
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-500">Item number</dt>
-                      <dd className="text-right font-medium text-slate-800">{position.plantillaItemNumber || 'To be announced'}</dd>
+                      <dd className="min-w-0 break-words text-right font-medium text-slate-800">{position.plantillaItemNumber || 'To be announced'}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-500">Salary grade</dt>
-                      <dd className="text-right font-medium text-slate-800">{position.salaryJobPayGrade || 'See posting details'}</dd>
+                      <dd className="min-w-0 break-words text-right font-medium text-slate-800">{position.salaryJobPayGrade || 'See posting details'}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
                       <dt className="text-slate-500">Monthly salary</dt>
-                      <dd className="text-right font-medium text-slate-800">{position.monthlySalary || 'See posting details'}</dd>
+                      <dd className="min-w-0 break-words text-right font-medium text-slate-800">{position.monthlySalary || 'See posting details'}</dd>
                     </div>
                   </dl>
                   {position.createdAt && (
@@ -209,7 +209,7 @@ export default function Home() {
                   <Link
                     to="/submit-personal-data-sheet"
                     state={{ jobPosting: position }}
-                    className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                    className="mt-6 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
                   >
                     Apply for this position <FiArrowRight aria-hidden="true" />
                   </Link>

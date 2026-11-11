@@ -453,7 +453,7 @@ function MyLeaves({ staffId }) {
 
       <button
         onClick={handleExportCsv}
-        className="mb-4 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition text-sm font-semibold shadow-sm"
+        className="mb-4 px-4 py-2.5 sm:py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition text-sm font-semibold shadow-sm"
         title="Export CSV"
       >
         Export CSV
@@ -532,8 +532,8 @@ function MyLeaves({ staffId }) {
 
       <div className="space-y-4">
         {filteredLeaves.map((leave) => (
-          <div key={leave.leaveId} className="bg-white p-5 rounded-lg border border-blue-100 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
+          <div key={leave.leaveId} className="bg-white p-4 sm:p-5 rounded-lg border border-blue-100 shadow-sm">
+            <div className="flex flex-wrap justify-between items-start gap-2 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-blue-950">{leave.leaveType}</h3>
                 <p className="text-blue-700/80 text-sm">ID: {leave.leaveId}</p>
@@ -593,16 +593,16 @@ function MyLeaves({ staffId }) {
                 <div className="mt-4">
                   <button
                     onClick={() => openPrintSetupModal(leave)}
-                    className="mr-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-semibold"
+                    className="mr-2 mb-2 px-4 py-2.5 sm:py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-semibold"
                   >
                     Print
                   </button>
                 </div>
                     {/* Print Setup Modal */}
                     {showPrintModal && (
-                      <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                        <div className="bg-white w-full max-w-lg rounded shadow-lg p-6">
-                          <h3 className="text-lg font-bold mb-3">Print Setup (7.B Recommendation)</h3>
+                      <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+                        <div role="dialog" aria-modal="true" aria-labelledby="print-setup-title" className="bg-white w-full max-w-lg max-h-[90vh] overflow-y-auto rounded shadow-lg p-4 sm:p-6">
+                          <h3 id="print-setup-title" className="text-lg font-bold mb-3">Print Setup (7.B Recommendation)</h3>
                           <p className="text-sm text-gray-600 mb-4">Please complete this before printing the leave form.</p>
                           <div className="space-y-4">
                             <div>
@@ -702,21 +702,21 @@ function MyLeaves({ staffId }) {
                               </div>
                             )}
                           </div>
-                          <div className="mt-5 flex justify-end gap-2">
+                          <div className="mt-5 flex flex-wrap justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => {
                                 setShowPrintModal(false);
                                 setPrintTargetLeave(null);
                               }}
-                              className="px-4 py-2 rounded bg-gray-200"
+                              className="px-4 py-2.5 sm:py-2 rounded bg-gray-200"
                             >
                               Cancel
                             </button>
                             <button
                               type="button"
                               onClick={handlePrintWithSetup}
-                              className="px-4 py-2 rounded bg-blue-600 text-white"
+                              className="px-4 py-2.5 sm:py-2 rounded bg-blue-600 text-white"
                             >
                               Continue to Print
                             </button>
@@ -730,7 +730,7 @@ function MyLeaves({ staffId }) {
             {leave.status === 'Pending' && (
               <button
                 onClick={() => deleteLeave(leave.leaveId)}
-                className="mt-4 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 text-sm font-semibold"
+                className="mt-4 bg-red-500 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-red-600 text-sm font-semibold"
               >
                 Delete Request
               </button>
@@ -739,7 +739,7 @@ function MyLeaves({ staffId }) {
             {leave.status === 'For Revision' && (
               <button
                 onClick={() => navigate(`/file-leave?edit=${leave.leaveId}`)}
-                className="mt-4 bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 text-sm font-semibold"
+                className="mt-4 bg-orange-500 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-orange-600 text-sm font-semibold"
               >
                 Edit & Resubmit
               </button>

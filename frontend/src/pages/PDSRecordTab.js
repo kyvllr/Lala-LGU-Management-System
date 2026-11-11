@@ -849,13 +849,13 @@ export default function PDSRecordTab() {
           <table className="w-full min-w-[850px] border-collapse text-sm text-slate-700">
             <thead>
               <tr className="bg-blue-100/80 text-left text-blue-900">
-                <th className="border border-blue-200 px-3 py-2">PDS ID</th>
-                <th className="border border-blue-200 px-3 py-2">Applicant</th>
-                <th className="border border-blue-200 px-3 py-2">Position</th>
-                <th className="border border-blue-200 px-3 py-2">Place of Assignment</th>
-                <th className="border border-blue-200 px-3 py-2">PDS Status</th>
-                <th className="border border-blue-200 px-3 py-2">Application Status</th>
-                <th className="border border-blue-200 px-3 py-2">Actions</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">PDS ID</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">Applicant</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">Position</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">Place of Assignment</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">PDS Status</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">Application Status</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -921,22 +921,22 @@ export default function PDSRecordTab() {
           <table className="w-full border-collapse text-[13px] text-slate-700">
             <thead>
               <tr className="bg-blue-100/80 text-blue-900">
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">PDS ID</th>
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Full Name</th>
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Email</th>
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Mobile</th>
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Account Type</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">PDS ID</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Full Name</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Email</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Mobile</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Account Type</th>
                 {recordTab === 'awardee' && (
-                  <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Type of Award</th>
+                  <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Type of Award</th>
                 )}
                 {recordTab === 'separated-retirees' && (
                   <>
-                    <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Special Order Number</th>
-                    <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Effectivity Date</th>
+                    <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Special Order Number</th>
+                    <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Effectivity Date</th>
                   </>
                 )}
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Submitted</th>
-                <th className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Actions</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Submitted</th>
+                <th scope="col" className="border border-blue-200 px-3 py-2 text-left text-xs font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1081,7 +1081,7 @@ export default function PDSRecordTab() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="awardee-modal-title"
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl"
           >
             <h3 id="awardee-modal-title" className="text-xl font-bold text-gray-900">Add PDS Record to Awardee</h3>
             <p className="mt-1 text-sm text-gray-600">
@@ -1147,7 +1147,7 @@ export default function PDSRecordTab() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="separation-details-title"
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-4 sm:p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h3 id="separation-details-title" className="text-xl font-bold text-gray-900">
@@ -1212,9 +1212,9 @@ export default function PDSRecordTab() {
 
       {viewRecord && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-gray-800">PDS Details</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="pds-details-title" className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+              <h3 id="pds-details-title" className="text-xl font-bold text-gray-800 min-w-0 break-words">PDS Details</h3>
               <button
                 type="button"
                 onClick={() => setViewRecord(null)}
@@ -1224,7 +1224,7 @@ export default function PDSRecordTab() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6 text-sm text-gray-800">
+            <div className="p-4 sm:p-6 space-y-6 text-sm text-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <p><span className="font-semibold">PDS ID:</span> {viewRecord.pdsId || 'N/A'}</p>
                 <p><span className="font-semibold">Status:</span> {viewRecord.status || 'Pending'}</p>
@@ -1342,13 +1342,13 @@ export default function PDSRecordTab() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-100">
-                          <th className="border border-gray-300 px-2 py-1 text-left">Level</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">School</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Period</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
-                          <th className="border border-gray-300 px-2 py-1 text-left">Honors</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Level</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">School</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Degree/Course</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Period</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Units Earned</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Year Graduated</th>
+                          <th scope="col" className="border border-gray-300 px-2 py-1 text-left">Honors</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1505,9 +1505,9 @@ export default function PDSRecordTab() {
 
       {showBulkPermissionModal && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">PDS Permission</h3>
+          <div role="dialog" aria-modal="true" aria-labelledby="pds-permission-title" className="bg-white rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+              <h3 id="pds-permission-title" className="text-lg font-bold text-gray-800">PDS Permission</h3>
               <p className="text-sm text-gray-600 mt-1">
                 Select a permission action for all approved employee PDS records.
               </p>

@@ -255,12 +255,14 @@ function Vault({ user }) {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search file name, folder, or type"
+                aria-label="Search files"
                 className="w-full border border-blue-200 rounded-md pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
               />
             </div>
             <select
               value={activeFolder}
               onChange={(event) => setActiveFolder(event.target.value)}
+              aria-label="Filter by folder"
               className="border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
             >
               <option value="All">All folders</option>
@@ -274,6 +276,7 @@ function Vault({ user }) {
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value)}
+              aria-label="Sort files"
               className="border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
             >
               <option value="uploadedAt">Sort by upload date</option>
@@ -284,7 +287,7 @@ function Vault({ user }) {
             <button
               type="button"
               onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-              className="inline-flex items-center justify-center gap-2 border border-blue-200 rounded-md px-3 py-2 text-sm hover:bg-blue-50 transition text-blue-700"
+              className="inline-flex min-h-[44px] sm:min-h-0 items-center justify-center gap-2 border border-blue-200 rounded-md px-3 py-2 text-sm hover:bg-blue-50 transition text-blue-700"
             >
               {sortDirection === 'asc' ? <TbSortAscending2 size={18} /> : <TbSortDescending2 size={18} />}
               {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
@@ -306,12 +309,13 @@ function Vault({ user }) {
                   }
                 }}
                 placeholder="Folder name"
-                className="flex-1 border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
+                aria-label="New folder name"
+                className="flex-1 min-w-0 border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
               />
               <button
                 type="button"
                 onClick={handleCreateFolder}
-                className="inline-flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-600 transition font-semibold"
+                className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-600 transition font-semibold"
               >
                 <TbFolderPlus size={18} />
                 Add
@@ -320,7 +324,7 @@ function Vault({ user }) {
             <button
               type="button"
               onClick={handleDeleteFolder}
-              className="mt-2 inline-flex items-center gap-2 border border-red-200 text-red-600 px-3 py-2 rounded-md text-sm hover:bg-red-50 transition font-medium"
+              className="mt-2 inline-flex min-h-[44px] sm:min-h-0 items-center gap-2 border border-red-200 text-red-600 px-3 py-2 rounded-md text-sm hover:bg-red-50 transition font-medium"
             >
               <TbTrash size={16} />
               Delete Selected Folder
@@ -336,13 +340,14 @@ function Vault({ user }) {
               <select
                 value={selectedUploadFolder}
                 onChange={(event) => setSelectedUploadFolder(event.target.value)}
+                aria-label="Upload destination folder"
                 className="border border-blue-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
               >
                 {folders.map((folder) => (
                   <option key={folder} value={folder}>{folder}</option>
                 ))}
               </select>
-              <label className="inline-flex items-center justify-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-md text-sm hover:bg-emerald-600 transition cursor-pointer font-semibold">
+              <label className="inline-flex min-h-[44px] sm:min-h-0 items-center justify-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-md text-sm hover:bg-emerald-600 transition cursor-pointer font-semibold">
                 <TbUpload size={18} />
                 {isUploading ? 'Uploading...' : 'Choose files'}
                 <input
@@ -369,7 +374,7 @@ function Vault({ user }) {
       </div>
 
       <div className="bg-white rounded-lg border border-blue-100 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-blue-100">
           <h2 className="text-lg font-semibold text-blue-950">Library</h2>
           <div className="flex items-center gap-3">
             <span className="text-sm text-blue-700/70">{visibleFiles.length} result(s)</span>
@@ -377,7 +382,7 @@ function Vault({ user }) {
               type="button"
               onClick={() => loadVaultData()}
               disabled={isLoading}
-              className="inline-flex items-center gap-1 border border-blue-200 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-50 transition text-xs font-medium disabled:opacity-50"
+              className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1 border border-blue-200 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-50 transition text-xs font-medium disabled:opacity-50"
               title="Refresh Vault files"
             >
               <TbRefresh size={15} />
@@ -398,18 +403,18 @@ function Vault({ user }) {
             <table className="min-w-full text-sm">
               <thead className="bg-blue-100/70 text-blue-900 uppercase text-xs tracking-wide">
                 <tr>
-                  <th className="text-left px-4 py-3">File Name</th>
-                  <th className="text-left px-4 py-3">Folder</th>
-                  <th className="text-left px-4 py-3">Type</th>
-                  <th className="text-left px-4 py-3">Size</th>
-                  <th className="text-left px-4 py-3">Uploaded</th>
-                  <th className="text-right px-4 py-3">Actions</th>
+                  <th scope="col" className="text-left px-4 py-3">File Name</th>
+                  <th scope="col" className="text-left px-4 py-3">Folder</th>
+                  <th scope="col" className="text-left px-4 py-3">Type</th>
+                  <th scope="col" className="text-left px-4 py-3">Size</th>
+                  <th scope="col" className="text-left px-4 py-3">Uploaded</th>
+                  <th scope="col" className="text-right px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100">
                 {visibleFiles.map((file) => (
                   <tr key={file.id} className="hover:bg-blue-50/50">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{file.name}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-800 break-words">{file.name}</td>
                     <td className="px-4 py-3">
                       {canManageVault ? (
                         <select
@@ -439,7 +444,7 @@ function Vault({ user }) {
                         <button
                           type="button"
                           onClick={() => handleOpenFile(file.id, 'view', file.name)}
-                          className="inline-flex items-center gap-1 border border-blue-200 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-50 transition text-xs font-medium"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1 border border-blue-200 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-50 transition text-xs font-medium"
                           title="View file"
                         >
                           <span className="hidden sm:inline">View</span>
@@ -448,8 +453,9 @@ function Vault({ user }) {
                         <button
                           type="button"
                           onClick={() => handleOpenFile(file.id, 'download', file.name)}
-                          className="inline-flex items-center gap-1 border border-slate-300 text-slate-700 rounded-md px-2 py-1 hover:bg-slate-100 transition text-xs font-medium"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1 border border-slate-300 text-slate-700 rounded-md px-2 py-1 hover:bg-slate-100 transition text-xs font-medium"
                           title="Download file"
+                          aria-label="Download file"
                         >
                           <TbDownload size={16} />
                           <span className="hidden sm:inline">Download</span>
@@ -457,8 +463,9 @@ function Vault({ user }) {
                         {canManageVault && <button
                           type="button"
                           onClick={() => handleDeleteFile(file.id)}
-                          className="inline-flex items-center gap-1 border border-red-200 text-red-600 rounded-md px-2 py-1 hover:bg-red-50 transition text-xs font-medium"
+                          className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1 border border-red-200 text-red-600 rounded-md px-2 py-1 hover:bg-red-50 transition text-xs font-medium"
                           title="Delete file"
+                          aria-label="Delete file"
                         >
                           <TbTrash size={16} />
                           <span className="hidden sm:inline">Delete</span>

@@ -410,11 +410,11 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                   selectedLeave?.leaveId === leave.leaveId ? 'border-2 border-blue-500' : ''
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-blue-950">{leave.staffName}</h3>
-                    <p className="text-blue-700/80 text-sm">{leave.leaveType}</p>
-                    <p className="text-blue-700/80 text-sm">
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-blue-950 break-words">{leave.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm break-words">{leave.leaveType}</p>
+                    <p className="text-blue-700/80 text-sm break-words">
                       {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                     </p>
                   </div>
@@ -491,8 +491,9 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
             
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleApprove(); }}>
               <div>
-                <label className="block font-bold mb-2">Approval Remarks (Optional)</label>
+                <label htmlFor="leave-head-approval-remarks" className="block font-bold mb-2">Approval Remarks (Optional)</label>
                 <textarea
+                  id="leave-head-approval-remarks"
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
@@ -507,14 +508,14 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     const enrichedLeave = await enrichLeaveWithBalance(selectedLeave);
                     openPrintWindow(enrichedLeave);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-blue-500 hover:bg-blue-600"
                 >
                   Print
                 </button>
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve & Forward to Admin
                 </button>
@@ -524,7 +525,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -534,7 +535,7 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Request Revision
                 </button>
@@ -545,9 +546,9 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="head-disapprove-leave-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="head-disapprove-leave-title" className="text-lg font-bold mb-3">Disapprove Leave Request</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
@@ -577,9 +578,9 @@ function ApproveLeavesHeadOfficer({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Request Revision</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="head-revision-leave-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="head-revision-leave-title" className="text-lg font-bold mb-3">Request Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}

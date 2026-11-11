@@ -122,7 +122,7 @@ function ApprovalRequestsHub({ userRole }) {
 
   if (tabs.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto mt-12 bg-white rounded-lg shadow p-8 text-center">
+      <div className="max-w-2xl mx-auto mt-12 bg-white rounded-lg shadow p-6 sm:p-8 text-center">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Unauthorized</h1>
         <p className="text-gray-600">You do not have permission to access this page.</p>
       </div>
@@ -162,7 +162,7 @@ function ApprovalRequestsHub({ userRole }) {
               key={tab.key}
               type="button"
               onClick={() => setTab(tab.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+              className={`min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg text-sm font-semibold transition ${activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
             >
               {tab.label}
             </button>
@@ -176,7 +176,7 @@ function ApprovalRequestsHub({ userRole }) {
                 key={statusTab.label}
                 type="button"
                 onClick={() => setStatus(statusTab.key)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${activeStatus === statusTab.key ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-transparent hover:bg-gray-200'}`}
+                className={`min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-md text-xs font-semibold transition ${activeStatus === statusTab.key ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-transparent hover:bg-gray-200'}`}
               >
                 {statusTab.label}
               </button>

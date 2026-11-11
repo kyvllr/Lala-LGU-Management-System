@@ -97,10 +97,26 @@ function formatPendingCase(value) {
   return '-';
 }
 
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQuery.matches);
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+
 function AppContent() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
@@ -849,6 +865,25 @@ function AppContent() {
     openUpdateAccountModal('info');
   };
 
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!isDesktop && mobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+    return undefined;
+  }, [isDesktop, mobileNavOpen]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -891,12 +926,40 @@ function AppContent() {
   const currentYear = new Date().getFullYear();
   const navLinkBaseClass = 'flex items-center gap-3 px-4 py-2 rounded-lg text-[14px] font-medium transition-colors duration-200 [&>svg]:text-blue-600 [&>svg]:transition-colors';
   const navLinkClassName = ({ isActive }) => `${navLinkBaseClass} ${!sidebarOpen ? 'justify-center' : ''} ${isActive ? 'bg-blue-500 text-white shadow-sm border-l-4 border-l-blue-200 [&>svg]:text-white' : 'text-blue-700 hover:bg-blue-600 hover:text-white hover:[&>svg]:text-white'}`;
-  const navIconButtonClass = 'p-2 hover:bg-blue-50 text-blue-700 rounded-lg transition-colors duration-200';
+  const navIconButtonClass = 'p-2.5 hover:bg-blue-50 text-blue-700 rounded-lg transition-colors duration-200';
+  // The mobile drawer always shows labels; collapsing applies only on desktop.
+  const sidebarOpen = !isDesktop || desktopSidebarOpen;
+  const closeMobileNav = () => setMobileNavOpen(false);
+  const handleSidebarToggle = () => {
+    if (isDesktop) {
+      setDesktopSidebarOpen((prev) => !prev);
+    } else {
+      setMobileNavOpen((prev) => !prev);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:bg-white focus:text-blue-700 focus:font-semibold focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+          onClick={closeMobileNav}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-72' : 'w-24'} bg-white border-r-2 border-blue-600 text-slate-700 flex flex-col shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-all duration-300 overflow-hidden`}>
+      <aside
+        id="app-sidebar"
+        aria-label="Sidebar"
+        className={`fixed inset-y-0 left-0 z-50 w-72 flex flex-col bg-white border-r-2 border-blue-600 text-slate-700 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition-transform duration-300 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:z-auto lg:translate-x-0 lg:overflow-hidden lg:transition-all ${sidebarOpen ? 'lg:w-72' : 'lg:w-24'}`}
+      >
         {/* Logo/Header */}
         <div className={`relative text-center bg-white ${sidebarOpen ? 'px-5 pt-6 pb-5' : 'px-2 pt-5 pb-4'}`}>
           <div className={`pointer-events-none absolute left-0 right-0 h-[1.5px] bg-blue-600 ${sidebarOpen ? 'top-[95px]' : 'top-[70px]'}`} />
@@ -916,7 +979,7 @@ function AppContent() {
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+        <nav aria-label="Main navigation" onClick={closeMobileNav} className="flex-1 min-h-0 p-4 space-y-1.5 overflow-y-auto">
           <NavLink 
             to="/" 
             end
@@ -1080,53 +1143,63 @@ function AppContent() {
           <FiPower size={20} />
           {sidebarOpen && <span>Logout</span>}
         </button>
-      </div>
+      </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <div className="bg-white border-b border-blue-100 px-5 py-3 shadow-sm flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={navIconButtonClass}
-            >
-              <FiMenu size={24} />
-            </button>
-          </div>
-          <div className="flex items-center gap-6">
+      <header className="bg-white border-b border-blue-100 px-3 sm:px-5 py-3 shadow-sm flex justify-between items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={handleSidebarToggle}
+            className={navIconButtonClass}
+            aria-label={isDesktop ? (desktopSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar') : 'Open navigation menu'}
+            aria-controls="app-sidebar"
+            aria-expanded={isDesktop ? desktopSidebarOpen : mobileNavOpen}
+          >
+            <FiMenu size={24} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
+          <button
+            type="button"
+            onClick={() => {
+              setShowNotifications(false);
+              setShowProfileMenu(false);
+              setShowCalculatorModal(true);
+            }}
+            className={navIconButtonClass}
+            title="Open calculator"
+            aria-label="Open calculator"
+          >
+            <TbCalculator size={24} aria-hidden="true" />
+          </button>
+
+          {/* Notification Bell */}
+          <div className="relative" ref={notificationsRef}>
             <button
+              type="button"
               onClick={() => {
-                setShowNotifications(false);
                 setShowProfileMenu(false);
-                setShowCalculatorModal(true);
+                setShowNotifications((prev) => !prev);
               }}
-              className={navIconButtonClass}
-              title="Open calculator"
+              className={`${navIconButtonClass} relative`}
+              aria-label={`Notifications${notificationCount > 0 ? `, ${notificationCount} unread` : ''}`}
+              aria-expanded={showNotifications}
             >
-              <TbCalculator size={24} />
+              <TbBell size={24} aria-hidden="true" />
+              {notificationCount > 0 && (
+                <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center" aria-hidden="true">
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </span>
+              )}
             </button>
 
-            {/* Notification Bell */}
-            <div className="relative" ref={notificationsRef}>
-              <button
-                onClick={() => {
-                  setShowProfileMenu(false);
-                  setShowNotifications((prev) => !prev);
-                }}
-                className={`${navIconButtonClass} relative`}
-              >
-                <TbBell size={24} />
-                {notificationCount > 0 && (
-                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {notificationCount > 9 ? '9+' : notificationCount}
-                  </span>
-                )}
-              </button>
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-1.5rem))] bg-white text-gray-800 rounded shadow-lg z-50 max-h-96 overflow-y-auto">
 
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white text-gray-800 rounded shadow-lg z-50 max-h-96 overflow-y-auto">
                   <div className="p-4 border-b">
                     <h3 className="font-bold text-lg">Notifications</h3>
                   </div>
@@ -1157,6 +1230,7 @@ function AppContent() {
                             }}
                             className="ml-2 p-1 hover:bg-black hover:bg-opacity-10 rounded transition flex-shrink-0"
                             title="Dismiss notification"
+                            aria-label="Dismiss notification"
                           >
                             <TbX size={18} />
                           </button>
@@ -1172,23 +1246,26 @@ function AppContent() {
               )}
             </div>
 
-            <div className="text-right text-slate-700">
+            <div className="hidden md:block text-right text-slate-700">
               <p className="text-xs uppercase tracking-wider text-slate-500">{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</p>
               <p className="font-semibold text-sm">{user.name}</p>
             </div>
             <div className="relative" ref={profileMenuRef}>
               <button
+                type="button"
                 onClick={() => {
                   setShowNotifications(false);
                   setShowProfileMenu((prev) => !prev);
                 }}
-                className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-700 hover:bg-blue-100 transition"
+                className="w-10 h-10 shrink-0 bg-blue-50 rounded-full flex items-center justify-center text-blue-700 hover:bg-blue-100 transition"
                 title="Profile menu"
+                aria-label="Profile menu"
+                aria-expanded={showProfileMenu}
               >
                 {user.profilePhotoDataUrl ? (
                   <img src={user.profilePhotoDataUrl} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
-                  <TbUser size={22} />
+                  <TbUser size={22} aria-hidden="true" />
                 )}
               </button>
 
@@ -1196,13 +1273,13 @@ function AppContent() {
                 <div className="absolute right-0 mt-2 w-40 bg-white text-gray-800 rounded shadow-lg z-50 overflow-hidden">
                   <button
                     onClick={openProfileModalFromMenu}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 transition"
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-100 transition"
                   >
                     Profile
                   </button>
                   <button
                     onClick={openLogoutConfirmModal}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 transition"
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-100 transition"
                   >
                     Logout
                   </button>
@@ -1210,10 +1287,10 @@ function AppContent() {
               )}
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6 focus:outline-none">
           <Routes>
             <Route 
               path="/" 
@@ -1531,21 +1608,23 @@ function AppContent() {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="bg-blue-400 px-8 py-5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="text-white text-2xl">👤</div>
-                    <h2 className="text-white text-2xl font-bold">My Profile</h2>
+                <div className="bg-blue-400 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="text-white text-2xl" aria-hidden="true">👤</div>
+                    <h2 className="text-white text-xl sm:text-2xl font-bold truncate">My Profile</h2>
                   </div>
                   <button
+                    type="button"
                     onClick={closeUpdateAccountModal}
-                    className="text-blue-100 hover:text-white transition text-2xl"
+                    className="text-blue-100 hover:text-white transition text-2xl p-1"
+                    aria-label="Close profile"
                   >
                     ✕
                   </button>
                 </div>
 
                 {/* Tab Navigation */}
-                <div className="bg-white border-b border-gray-200 px-8 flex gap-8">
+                <div className="bg-white border-b border-gray-200 px-4 sm:px-8 flex gap-4 sm:gap-8 overflow-x-auto">
                   <button
                     type="button"
                     onClick={() => {
@@ -1581,7 +1660,7 @@ function AppContent() {
                   </button>
                 </div>
 
-                <div className="overflow-y-auto flex-1 px-8 py-6">
+                <div className="overflow-y-auto flex-1 px-4 sm:px-8 py-5 sm:py-6">
                   {updateAccountError && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg border border-red-300">{updateAccountError}</div>}
                   {updateAccountSuccess && <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg border border-green-300">{updateAccountSuccess}</div>}
 
@@ -1722,7 +1801,7 @@ function AppContent() {
                   )}
 
                   {profileModalTab === 'edit' && (
-                    <form onSubmit={handleEditProfile} className="grid grid-cols-2 gap-5" id="editProfileForm">
+                    <form onSubmit={handleEditProfile} className="grid grid-cols-1 sm:grid-cols-2 gap-5" id="editProfileForm">
                       <div className="col-span-2 flex items-center gap-5">
                         <div className="w-20 h-20 rounded-full bg-blue-100 border border-blue-200 overflow-hidden flex items-center justify-center text-blue-700 flex-shrink-0">
                           {updateAccountData.profilePhotoDataUrl ? (
@@ -2103,7 +2182,7 @@ function AppContent() {
                   )}
                 </div>
 
-                <div className="border-t bg-white px-8 py-6">
+                <div className="border-t bg-white px-4 sm:px-8 py-5 sm:py-6">
                   <button
                     type="button"
                     onClick={closeUpdateAccountModal}
@@ -2243,7 +2322,7 @@ function AppContent() {
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

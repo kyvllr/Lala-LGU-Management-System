@@ -34,7 +34,7 @@ function FileRequestHub({ staffId }) {
               type="button"
               onClick={() => selectRequestType(tab.key)}
               aria-current={activeTab === tab.key ? 'page' : undefined}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+              className={`min-h-[44px] sm:min-h-0 rounded-md px-4 py-2 text-sm font-semibold transition ${
                 activeTab === tab.key
                   ? 'bg-blue-600 text-white shadow'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'

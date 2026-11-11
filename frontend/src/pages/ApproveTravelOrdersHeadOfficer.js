@@ -218,11 +218,11 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                   selectedOrder?.travelOrderId === order.travelOrderId ? 'border-2 border-blue-500' : ''
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-blue-950">{order.staffName}</h3>
-                    <p className="text-blue-700/80 text-sm">{order.travelOrderId || 'N/A'}</p>
-                    <p className="text-blue-700/80 text-sm">
+                <div className="flex flex-wrap justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-blue-950 break-words">{order.staffName}</h3>
+                    <p className="text-blue-700/80 text-sm break-words">{order.travelOrderId || 'N/A'}</p>
+                    <p className="text-blue-700/80 text-sm break-words">
                       {formatDate(order.dateFrom || order.periodCoveredFrom)} - {formatDate(order.dateTo || order.periodCoveredTo)}
                     </p>
                   </div>
@@ -303,8 +303,9 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
 
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleApprove(); }}>
               <div>
-                <label className="block font-bold mb-2">Approval Remarks (Optional)</label>
+                <label htmlFor="travel-head-approval-remarks" className="block font-bold mb-2">Approval Remarks (Optional)</label>
                 <textarea
+                  id="travel-head-approval-remarks"
                   value={approvalData.remarks}
                   onChange={(e) => setApprovalData({...approvalData, remarks: e.target.value})}
                   rows="3"
@@ -316,7 +317,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                 <button
                   type="button"
                   onClick={handleApprove}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-green-500 hover:bg-green-600"
                 >
                   Approve & Forward to Admin
                 </button>
@@ -326,7 +327,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                     setDisapproveComment('');
                     setShowDisapproveModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-red-500 hover:bg-red-600"
                 >
                   Disapprove
                 </button>
@@ -336,7 +337,7 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
                     setRevisionComment('');
                     setShowRevisionModal(true);
                   }}
-                  className="w-full py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
+                  className="w-full py-2.5 sm:py-2 rounded-md text-white text-sm font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   Request Revision
                 </button>
@@ -347,9 +348,9 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
       </div>
 
       {showDisapproveModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="travel-head-disapprove-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="travel-head-disapprove-title" className="text-lg font-bold mb-3">Disapprove Travel Order</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide a comment. This will be visible to the staff.</p>
             <textarea
               value={disapproveComment}
@@ -379,9 +380,9 @@ function ApproveTravelOrdersHeadOfficer({ forcedStatus = 'Pending' }) {
       )}
 
       {showRevisionModal && (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md rounded-xl border border-blue-100 shadow-2xl p-6">
-            <h3 className="text-lg font-bold mb-3">Request Revision</h3>
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="travel-head-revision-title" className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-blue-100 shadow-2xl p-4 sm:p-6">
+            <h3 id="travel-head-revision-title" className="text-lg font-bold mb-3">Request Revision</h3>
             <p className="text-sm text-gray-600 mb-3">Please provide revision notes. This will be visible to the staff.</p>
             <textarea
               value={revisionComment}

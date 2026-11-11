@@ -271,11 +271,13 @@ function MyTravelOrders({ staffId }) {
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder="Search travel orders..."
+          aria-label="Search travel orders"
           className="w-full sm:flex-1 px-4 py-2 border border-blue-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
         />
         <select
           value={searchAttribute}
           onChange={(e) => setSearchAttribute(e.target.value)}
+          aria-label="Search by attribute"
           className="w-full sm:w-56 px-4 py-2 border border-blue-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500 bg-white"
         >
           <option value="travelOrderId">Travel ID</option>
@@ -431,11 +433,11 @@ function MyTravelOrders({ staffId }) {
               </div>
             )}
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {order.status === 'Pending' && (
                 <button
                   onClick={() => deleteTravelOrder(order.travelOrderId)}
-                  className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 text-sm font-semibold"
+                  className="bg-red-500 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-red-600 text-sm font-semibold"
                 >
                   Delete Order
                 </button>
@@ -443,7 +445,7 @@ function MyTravelOrders({ staffId }) {
               {order.status === 'For Revision' && (
                 <button
                   onClick={() => navigate(`/file-travel?edit=${order.travelOrderId}`)}
-                  className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 text-sm font-semibold"
+                  className="bg-orange-500 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-orange-600 text-sm font-semibold"
                 >
                   Edit & Resubmit
                 </button>
@@ -455,7 +457,7 @@ function MyTravelOrders({ staffId }) {
                       const ok = printTravelOrderShared(order);
                       if (!ok) setError('Unable to open print window. Please allow pop-ups and try again.');
                     }}
-                    className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 text-sm font-semibold"
+                    className="bg-slate-600 text-white px-4 py-2.5 sm:py-2 rounded-md hover:bg-slate-700 text-sm font-semibold"
                   >
                     Print
                   </button>
